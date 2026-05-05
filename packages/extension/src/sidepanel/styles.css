@@ -17,7 +17,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --fg: #f5f6f8;
     --bg: #15171b;
     --muted: #9ca0a8;
@@ -32,6 +32,22 @@
     --err: #ef6f7a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
+}
+
+:root[data-theme='dark'] {
+  --fg: #f5f6f8;
+  --bg: #15171b;
+  --muted: #9ca0a8;
+  --border: #2a2d33;
+  --surface: #1c1f24;
+  --surface-2: #23262c;
+  --accent: #4aa6ff;
+  --accent-pressed: #3690ec;
+  --accent-soft: rgba(74, 166, 255, 0.16);
+  --ok: #6cd28b;
+  --warn: #f0b75c;
+  --err: #ef6f7a;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -208,9 +224,12 @@ body {
   background: rgba(0, 0, 0, 0.04);
 }
 @media (prefers-color-scheme: dark) {
-  .banner-action:hover {
+  :root:not([data-theme='light']) .banner-action:hover {
     background: rgba(255, 255, 255, 0.06);
   }
+}
+:root[data-theme='dark'] .banner-action:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .card {
@@ -652,6 +671,35 @@ body {
 
 .menu-item.is-danger:hover {
   background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 4px;
+}
+
+.menu-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 10px 2px;
+}
+
+.menu-item-choice {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-check {
+  font-size: 11px;
+  color: var(--accent);
+  text-align: center;
+  font-weight: 700;
 }
 
 .hero {

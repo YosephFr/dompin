@@ -3,6 +3,9 @@ import type { PinForPage, Session, SessionListItem, VaultStatus } from '../commo
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
+import { I18nProvider, resolveLocale, useT } from '../common/i18n/index.js';
+import type { LocalePreference, Settings, ThemePreference } from '../common/settings.js';
+import { applyTheme } from './theme.js';
 import {
   busyDeleteId,
   busyEditId,
@@ -19,6 +22,21 @@ import { RecentSessionsCard } from './components/RecentSessionsCard.js';
 import { PickerHero, type PickerState } from './components/PickerHero.js';
 
 export function App(): JSX.Element {
+  const [locale, setLocale] = useState<'en' | 'es'>(() => resolveLocale('auto'));
+  return (
+    <I18nProvider locale={locale}>
+      <AppInner onLocaleResolve={setLocale} />
+    </I18nProvider>
+  );
+}
+
+function Loading(): JSX.Element {
+  const t = useT();
+  return <div className="loading">{t.app.loading}</div>;
+}
+
+function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => void }): JSX.Element {
+  const t = useT();
   const [state, setState] = useState<ExtensionState | null>(null);
   const [origin, setOrigin] = useState<OriginTab>(EMPTY_ORIGIN);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
@@ -37,6 +55,12 @@ export function App(): JSX.Element {
   const stateRef = useRef<ExtensionState | null>(null);
   const sessionCardRef = useRef<HTMLElement | null>(null);
   const flashTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!state) return;
+    applyTheme(state.settings.preferences.theme);
+    onLocaleResolve(resolveLocale(state.settings.preferences.locale));
+  }, [state, onLocaleResolve]);
 
   useEffect(() => {
     void bootstrap();
@@ -331,9 +355,7 @@ export function App(): JSX.Element {
 
   async function endSession(): Promise<void> {
     if (!activeSession) return;
-    const ok = window.confirm(
-      'End this session? You can start a new one anytime. Your files stay where they are.',
-    );
+    const ok = window.confirm(t.session.endConfirm);
     if (!ok) return;
     setBusy('archive');
     setError(null);
@@ -380,7 +402,7 @@ export function App(): JSX.Element {
   }
 
   async function deletePin(pin: PinForPage): Promise<void> {
-    if (!window.confirm(`Delete annotation #${String(pin.ordinal).padStart(2, '0')}?`)) return;
+    if (!window.confirm(t.pins.deleteConfirm(String(pin.ordinal).padStart(2, '0')))) return;
     setBusy({ kind: 'delete', id: pin.id });
     setError(null);
     try {
@@ -404,11 +426,41 @@ export function App(): JSX.Element {
     setShowOnboardingForced(true);
   }
 
+  async function persistPreferences(next: Settings['preferences']): Promise<void> {
+    const cur = stateRef.current;
+    if (!cur) return;
+    const settings: Settings = { ...cur.settings, preferences: next };
+    setState({ ...cur, settings });
+    stateRef.current = { ...cur, settings };
+    await sendRequest({ kind: 'settings:save', settings });
+  }
+
+  function setThemePref(theme: ThemePreference): void {
+    const cur = stateRef.current;
+    if (!cur) return;
+    applyTheme(theme);
+    void persistPreferences({ ...cur.settings.preferences, theme });
+  }
+
+  function setLocalePref(locale: LocalePreference): void {
+    const cur = stateRef.current;
+    if (!cur) return;
+    onLocaleResolve(resolveLocale(locale));
+    void persistPreferences({ ...cur.settings.preferences, locale });
+  }
+
   if (!state) {
     return (
       <div className="shell">
-        <Head onOpenSettings={openSettings} onShowOnboarding={showOnboarding} />
-        <div className="loading">Loading…</div>
+        <Head
+          onOpenSettings={openSettings}
+          onShowOnboarding={showOnboarding}
+          theme="auto"
+          onThemeChange={() => undefined}
+          locale="auto"
+          onLocaleChange={() => undefined}
+        />
+        <Loading />
       </div>
     );
   }
@@ -421,7 +473,14 @@ export function App(): JSX.Element {
 
   return (
     <div className="shell">
-      <Head onOpenSettings={openSettings} onShowOnboarding={showOnboarding} />
+      <Head
+        onOpenSettings={openSettings}
+        onShowOnboarding={showOnboarding}
+        theme={state.settings.preferences.theme}
+        onThemeChange={setThemePref}
+        locale={state.settings.preferences.locale}
+        onLocaleChange={setLocalePref}
+      />
       <div className="body">
         {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
 

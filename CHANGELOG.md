@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-05
+
+### Added
+
+- **Theme switcher** in the side panel's overflow menu: Auto (system), Light, Dark. Persisted across sessions.
+- **Language switcher** in the same menu with English and Español. Auto-detects from the browser locale by default; manual override is persisted.
+- **Highlight stays visible while you write the pin**: the element outline + DevTools-style infobox no longer disappear when the comment popup opens.
+- **Provisional marker on the element while you type**: the numbered bubble for the pin you're about to save now appears over the element as soon as the popup opens, so you can see the order of the next pin before committing.
+
+### Changed
+
+- `outerHTMLPreview` capped at 800 chars (down from 4096) for non-SVG elements; SVG elements now get a compact `<svg attrs>…</svg>` summary instead of the full path-heavy markup. Drastically smaller `NN.md` and `NN.json` files for icon-heavy pages.
+- `## Element` section in `NN.md` now lists the selector inline alongside the tag and XPath; the redundant `**Selector**:` line in the header is gone.
+
 ## [0.1.0] — 2026-05-05
 
 Initial public release.
@@ -72,4 +86,5 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.2.0]: https://github.com/YosephFr/dompin/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YosephFr/dompin/releases/tag/v0.1.0

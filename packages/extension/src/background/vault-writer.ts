@@ -371,12 +371,6 @@ function renderAnnotationMarkdown(
   lines.push(
     `**Page**: [${escapeMd(payload.page.title || payload.page.url)}](${payload.page.url})`,
   );
-  if (payload.element) {
-    lines.push(`**Selector**: \`${payload.element.selector}\``);
-  } else if (payload.region) {
-    const r = payload.region.rect;
-    lines.push(`**Selector**: \`region ${Math.round(r.width)}×${Math.round(r.height)}\``);
-  }
   lines.push('');
   lines.push('## Comment');
   lines.push('');
@@ -411,6 +405,7 @@ function appendElementSection(
   const idPart = el.id ? `#${el.id}` : '';
   const classPart = el.classes.length ? `.${el.classes.join('.')}` : '';
   lines.push(`- Tag: \`${el.tag}${idPart}${classPart}\``);
+  lines.push(`- Selector: \`${el.selector}\``);
   lines.push(`- XPath: \`${el.xpath}\``);
   const r = el.boundingRect;
   lines.push(

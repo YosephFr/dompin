@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-
-export interface MenuAction {
-  id: string;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}
+import type { LocalePreference, ThemePreference } from '../../common/settings.js';
+import { useT } from '../../common/i18n/index.js';
 
 export function Head({
   onOpenSettings,
   onShowOnboarding,
+  theme,
+  onThemeChange,
+  locale,
+  onLocaleChange,
 }: {
   onOpenSettings: () => void;
   onShowOnboarding: () => void;
+  theme: ThemePreference;
+  onThemeChange: (t: ThemePreference) => void;
+  locale: LocalePreference;
+  onLocaleChange: (l: LocalePreference) => void;
 }): JSX.Element {
-  const items: MenuAction[] = [
-    { id: 'settings', label: 'Open settings', onClick: onOpenSettings },
-    { id: 'onboarding', label: 'Show onboarding', onClick: onShowOnboarding },
-  ];
-
+  const t = useT();
   return (
     <header className="head">
       <div className="brand">
@@ -26,13 +25,38 @@ export function Head({
         <span className="brand-name">DOMPin</span>
       </div>
       <div className="head-actions">
-        <OverflowMenu items={items} />
+        <OverflowMenu
+          theme={theme}
+          onThemeChange={onThemeChange}
+          locale={locale}
+          onLocaleChange={onLocaleChange}
+          onOpenSettings={onOpenSettings}
+          onShowOnboarding={onShowOnboarding}
+          ariaLabel={t.head.menu.open}
+        />
       </div>
     </header>
   );
 }
 
-function OverflowMenu({ items }: { items: MenuAction[] }): JSX.Element {
+function OverflowMenu({
+  theme,
+  onThemeChange,
+  locale,
+  onLocaleChange,
+  onOpenSettings,
+  onShowOnboarding,
+  ariaLabel,
+}: {
+  theme: ThemePreference;
+  onThemeChange: (t: ThemePreference) => void;
+  locale: LocalePreference;
+  onLocaleChange: (l: LocalePreference) => void;
+  onOpenSettings: () => void;
+  onShowOnboarding: () => void;
+  ariaLabel: string;
+}): JSX.Element {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -54,38 +78,107 @@ function OverflowMenu({ items }: { items: MenuAction[] }): JSX.Element {
     };
   }, [open]);
 
+  const close = () => setOpen(false);
+
   return (
     <div className="menu-wrap" ref={ref}>
       <button
         type="button"
         className="icon-btn"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Open menu"
+        aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Menu"
+        title={ariaLabel}
       >
         <DotsIcon />
       </button>
       {open ? (
         <div className="menu" role="menu">
-          {items.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              role="menuitem"
-              className={`menu-item ${it.danger ? 'is-danger' : ''}`}
-              onClick={() => {
-                setOpen(false);
-                it.onClick();
-              }}
-            >
-              {it.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close();
+              onOpenSettings();
+            }}
+          >
+            {t.head.menu.settings}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close();
+              onShowOnboarding();
+            }}
+          >
+            {t.head.menu.onboarding}
+          </button>
+          <div className="menu-sep" role="separator" />
+          <div className="menu-group-label">{t.head.menu.themeLabel}</div>
+          <ChoiceItem
+            label={t.head.menu.themeAuto}
+            checked={theme === 'auto'}
+            onClick={() => onThemeChange('auto')}
+          />
+          <ChoiceItem
+            label={t.head.menu.themeLight}
+            checked={theme === 'light'}
+            onClick={() => onThemeChange('light')}
+          />
+          <ChoiceItem
+            label={t.head.menu.themeDark}
+            checked={theme === 'dark'}
+            onClick={() => onThemeChange('dark')}
+          />
+          <div className="menu-sep" role="separator" />
+          <div className="menu-group-label">{t.head.menu.languageLabel}</div>
+          <ChoiceItem
+            label={t.head.menu.languageAuto}
+            checked={locale === 'auto'}
+            onClick={() => onLocaleChange('auto')}
+          />
+          <ChoiceItem
+            label={t.head.menu.languageEn}
+            checked={locale === 'en'}
+            onClick={() => onLocaleChange('en')}
+          />
+          <ChoiceItem
+            label={t.head.menu.languageEs}
+            checked={locale === 'es'}
+            onClick={() => onLocaleChange('es')}
+          />
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ChoiceItem({
+  label,
+  checked,
+  onClick,
+}: {
+  label: string;
+  checked: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={checked}
+      className={`menu-item menu-item-choice ${checked ? 'is-checked' : ''}`}
+      onClick={onClick}
+    >
+      <span className="menu-check" aria-hidden="true">
+        {checked ? '✓' : ''}
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -102,23 +195,23 @@ export function Foot({
   onChangeVault: () => void;
   busyChange: boolean;
 }): JSX.Element {
+  const t = useT();
+  const text = !configured
+    ? t.foot.notConfigured
+    : unreachable
+      ? t.foot.unreachable(rootName ?? '—')
+      : t.foot.vault(rootName ?? '—');
   return (
     <footer className="foot">
-      <span className="foot-meta">
-        {!configured
-          ? 'Vault not configured'
-          : unreachable
-            ? `Vault unreachable: ${rootName ?? '—'}`
-            : `Vault: ${rootName ?? '—'}`}
-      </span>
+      <span className="foot-meta">{text}</span>
       <div className="foot-actions">
         <button
           type="button"
           className="icon-btn icon-btn-tiny"
           onClick={onChangeVault}
           disabled={busyChange}
-          aria-label="Change vault folder"
-          title="Change vault folder"
+          aria-label={t.foot.changeVault}
+          title={t.foot.changeVault}
         >
           <PencilIcon />
         </button>
@@ -137,12 +230,13 @@ export function ErrorBanner({
   message: string;
   onDismiss: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <div className="banner banner-error">
       <span className="dot" aria-hidden="true" />
       <span className="banner-text">{message}</span>
       <button type="button" className="banner-action" onClick={onDismiss}>
-        Dismiss
+        {t.banner.error.dismiss}
       </button>
     </div>
   );
@@ -157,21 +251,22 @@ export function UnreachableBanner({
   onPickAnother: () => void;
   onReconnect: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <div className="banner banner-error" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="dot" aria-hidden="true" />
         <span className="banner-text">
-          Vault folder is unreachable. It may have been moved or deleted.
+          {t.banner.unreachable.message}
           {reason ? ` (${reason})` : ''}
         </span>
       </div>
       <div className="card-actions inline" style={{ marginTop: 8 }}>
         <button type="button" className="btn btn-primary" onClick={onPickAnother}>
-          Pick a new folder
+          {t.banner.unreachable.pickAnother}
         </button>
         <button type="button" className="btn btn-secondary" onClick={onReconnect}>
-          Try reconnect
+          {t.banner.unreachable.reconnect}
         </button>
       </div>
     </div>

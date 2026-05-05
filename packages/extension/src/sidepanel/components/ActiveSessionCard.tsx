@@ -1,6 +1,7 @@
 import { forwardRef, type FormEvent } from 'react';
 import type { Session } from '../../common/types.js';
 import { relativeTime, type Busy } from '../utils.js';
+import { useT } from '../../common/i18n/index.js';
 
 export interface ActiveSessionCardProps {
   flash?: boolean;
@@ -41,13 +42,14 @@ export const ActiveSessionCard = forwardRef<HTMLElement, ActiveSessionCardProps>
     },
     ref,
   ): JSX.Element {
+    const t = useT();
     return (
       <section ref={ref} className={`card session-card ${flash ? 'is-flashing' : ''}`}>
         <div className="card-header">
-          <span className="card-eyebrow">Session</span>
+          <span className="card-eyebrow">{t.session.eyebrow}</span>
           {session ? (
             <span className="session-meta">
-              {relativeTime(session.lastWriteAt ?? session.startedAt)}
+              {relativeTime(session.lastWriteAt ?? session.startedAt, t)}
             </span>
           ) : null}
         </div>
@@ -98,6 +100,7 @@ function NewSessionForm({
   onSubmit: (name: string | null) => void;
   onCancel: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <form
       className="inline-form"
@@ -111,15 +114,15 @@ function NewSessionForm({
         autoFocus
         className="inline-input"
         value={value}
-        placeholder="Session name (optional)"
+        placeholder={t.session.namePlaceholder}
         onChange={(e) => onChange(e.target.value)}
       />
       <div className="card-actions inline">
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Creating…' : 'Create'}
+          {busy ? t.session.creating : t.session.create}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
+          {t.session.cancel}
         </button>
       </div>
     </form>
@@ -139,6 +142,7 @@ function RenameForm({
   onSubmit: (e: FormEvent) => void;
   onCancel: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <form className="inline-form" onSubmit={onSubmit}>
       <input
@@ -149,10 +153,10 @@ function RenameForm({
       />
       <div className="card-actions inline">
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t.session.saving : t.session.save}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
+          {t.session.cancel}
         </button>
       </div>
     </form>
@@ -174,33 +178,32 @@ function ActiveSessionInfo({
   onStartRename: () => void;
   onEndSession: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <>
       <div className="session-name">{session.name}</div>
       <div className="session-sub">
-        <span className="session-domain">{session.domain || domain || 'unknown host'}</span>
+        <span className="session-domain">{session.domain || domain || t.session.unknownHost}</span>
         <span className="session-dot" aria-hidden="true">
           ·
         </span>
-        <span>
-          {session.annotationCount} pin{session.annotationCount === 1 ? '' : 's'}
-        </span>
+        <span>{t.session.pinCount(session.annotationCount)}</span>
       </div>
       <div className="card-actions">
         <button type="button" className="btn btn-secondary" onClick={onStartNew}>
-          New session
+          {t.session.newButton}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onStartRename}>
-          Rename
+          {t.session.rename}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           onClick={onEndSession}
           disabled={busy === 'archive'}
-          title="Stop writing to this session. Files stay where they are."
+          title={t.session.endTooltip}
         >
-          End session
+          {t.session.end}
         </button>
       </div>
     </>
@@ -214,17 +217,16 @@ function EmptySessionInfo({
   domain: string | null;
   onStartNew: () => void;
 }): JSX.Element {
+  const t = useT();
   return (
     <>
-      <div className="session-name session-name-empty">No session yet</div>
+      <div className="session-name session-name-empty">{t.session.none}</div>
       <p className="card-text">
-        {domain
-          ? `Name a session for ${domain} to start pinning elements.`
-          : 'Open a regular tab to start a session.'}
+        {domain ? t.session.nonePromptDomain(domain) : t.session.nonePromptNoDomain}
       </p>
       <div className="card-actions">
         <button type="button" className="btn btn-primary" onClick={onStartNew} disabled={!domain}>
-          Start new session
+          {t.session.startNew}
         </button>
       </div>
     </>

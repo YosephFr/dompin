@@ -116,8 +116,11 @@ class ContentApp {
   private handlePickElement(el: Element): void {
     const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
+    this.highlight.show(el);
     const rect = el.getBoundingClientRect();
     const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    const provisionalOrd = this.markers.count() + 1;
+    this.markers.showProvisional(provisionalOrd, anchorRect);
     const selectorPreview = previewSelector(el);
     this.popup.open({
       anchorRect,
@@ -129,6 +132,7 @@ class ContentApp {
         else this.picker.resume();
       },
       onCancel: () => {
+        this.markers.hideProvisional();
         this.highlight.hide();
         if (wasOneShot) this.stopPicker();
         else this.picker.resume();
@@ -139,6 +143,8 @@ class ContentApp {
   private handlePickRegion(rect: RectInfo): void {
     const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
+    const provisionalOrd = this.markers.count() + 1;
+    this.markers.showProvisional(provisionalOrd, rect);
     this.popup.open({
       anchorRect: rect,
       selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
@@ -149,6 +155,7 @@ class ContentApp {
         else this.picker.resume();
       },
       onCancel: () => {
+        this.markers.hideProvisional();
         if (wasOneShot) this.stopPicker();
         else this.picker.resume();
       },

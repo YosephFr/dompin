@@ -1,3 +1,5 @@
+import { useT } from '../../common/i18n/index.js';
+
 export type PickerState = 'off' | 'on' | 'paused';
 
 export function PickerHero({
@@ -9,9 +11,11 @@ export function PickerHero({
   busy: boolean;
   onToggle: () => void;
 }): JSX.Element {
-  const label = state === 'on' ? 'Picking on' : state === 'paused' ? 'Picker paused' : 'Picker off';
+  const t = useT();
+  const label =
+    state === 'on' ? t.hero.pickerOn : state === 'paused' ? t.hero.pickerPaused : t.hero.pickerOff;
   const buttonLabel =
-    state === 'on' ? 'Stop picking' : state === 'paused' ? 'Resume picking' : 'Start picking';
+    state === 'on' ? t.hero.stop : state === 'paused' ? t.hero.resume : t.hero.start;
   const buttonClass = state === 'on' ? 'btn btn-danger-solid' : 'btn btn-primary';
 
   return (
@@ -26,10 +30,10 @@ export function PickerHero({
         onClick={onToggle}
         disabled={busy}
       >
-        {busy ? 'Working…' : buttonLabel}
+        {busy ? t.hero.working : buttonLabel}
       </button>
       <p className="hero-hint">
-        <span className="kbd">⌘ ⇧ .</span> &nbsp;or right-click an element for one-off
+        <span className="kbd">⌘ ⇧ .</span> &nbsp;{t.hero.hint}
       </p>
     </section>
   );

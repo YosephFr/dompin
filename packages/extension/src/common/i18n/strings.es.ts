@@ -1,0 +1,132 @@
+import type { Strings } from './strings.en.js';
+
+export const es: Strings = {
+  app: {
+    loading: 'Cargando…',
+  },
+  head: {
+    menu: {
+      open: 'Abrir menú',
+      settings: 'Abrir ajustes',
+      onboarding: 'Mostrar guía de inicio',
+      themeLabel: 'Tema',
+      themeAuto: 'Usar tema del sistema',
+      themeLight: 'Claro',
+      themeDark: 'Oscuro',
+      languageLabel: 'Idioma',
+      languageAuto: 'Automático (navegador)',
+      languageEn: 'English',
+      languageEs: 'Español',
+    },
+  },
+  banner: {
+    error: {
+      dismiss: 'Descartar',
+    },
+    unreachable: {
+      message: 'La carpeta del vault no es accesible. Puede haber sido movida o eliminada.',
+      pickAnother: 'Elegir otra carpeta',
+      reconnect: 'Intentar reconectar',
+    },
+  },
+  hero: {
+    pickerOff: 'Picker apagado',
+    pickerOn: 'Picker activo',
+    pickerPaused: 'Picker en pausa',
+    start: 'Iniciar picker',
+    stop: 'Detener picker',
+    resume: 'Reanudar picker',
+    working: 'Procesando…',
+    hint: 'o clic derecho sobre un elemento para captura única',
+  },
+  session: {
+    eyebrow: 'Sesión',
+    none: 'Sin sesión',
+    nonePromptDomain: (domain: string) =>
+      `Nombrá una sesión para ${domain} para empezar a anotar elementos.`,
+    nonePromptNoDomain: 'Abrí una pestaña normal para empezar una sesión.',
+    startNew: 'Iniciar nueva sesión',
+    newButton: 'Nueva sesión',
+    rename: 'Renombrar',
+    end: 'Terminar sesión',
+    endTooltip: 'Deja de escribir en esta sesión. Los archivos quedan donde están.',
+    endConfirm:
+      '¿Terminar esta sesión? Podés empezar una nueva en cualquier momento. Los archivos quedan donde están.',
+    namePlaceholder: 'Nombre de sesión (opcional)',
+    create: 'Crear',
+    creating: 'Creando…',
+    cancel: 'Cancelar',
+    save: 'Guardar',
+    saving: 'Guardando…',
+    pinCount: (n: number) => `${n} pin${n === 1 ? '' : 's'}`,
+    unknownHost: 'host desconocido',
+  },
+  pins: {
+    eyebrow: 'Anotaciones',
+    onThisPage: (n: number) => `${n} en esta página`,
+    empty: 'Ninguna aún — iniciá el picker y hacé clic en un elemento.',
+    noComment: '(sin comentario)',
+    edit: 'Editar',
+    delete: 'Eliminar',
+    deleteConfirm: (ord: string) => `¿Eliminar la anotación #${ord}?`,
+  },
+  recent: {
+    eyebrow: 'Sesiones recientes',
+    relative: {
+      now: 'ahora',
+      mAgo: (m: number) => `hace ${m}m`,
+      hAgo: (h: number) => `hace ${h}h`,
+      dAgo: (d: number) => `hace ${d}d`,
+    },
+  },
+  wizard: {
+    title: 'Bienvenido a DOMPin',
+    intro:
+      'Anotá elementos de cualquier página, dejá un comentario y DOMPin guarda un archivo Markdown más capturas de pantalla en una carpeta que vos elegís. Pasá la carpeta a tu agente de IA y ya tiene todo el contexto.',
+    close: 'Cerrar',
+    step1Title: 'Elegí una carpeta para tus anotaciones',
+    step1Tip:
+      'Solo hacés esto una vez. La extensión la recuerda entre sesiones. Podés cambiarla luego con el ícono de lápiz al pie.',
+    chooseFolder: 'Elegir carpeta…',
+    changeFolder: 'Cambiar carpeta…',
+    choosing: 'Eligiendo…',
+    step2Title: 'Abrí una pestaña e iniciá una sesión nombrada',
+    step2Tip: 'Cada pestaña tiene su propia sesión. Hacé clic en ',
+    step2TipBold: 'Iniciar nueva sesión',
+    step2TipRest: ' en la tarjeta de Sesión y dale un nombre. Tus anotaciones viven en ',
+    step2TipPath: '<carpeta>/<dominio>/<sesión>/',
+    step2TipDot: '.',
+    step3Title: 'Anotá elementos con el picker',
+    step3Tip: 'Una vez que la sesión esté activa, tocá ',
+    step3TipBold: 'Iniciar picker',
+    step3TipRest:
+      ' y hacé clic en cualquier elemento de la página — encadená cuantos quieras, el picker se queda activo. Cortá con el botón o ',
+    step3TipKey: 'Esc',
+    step3TipDot: '.',
+    step4Title: 'O capturá un elemento puntual al vuelo',
+    step4Tip: 'Apretá ',
+    step4TipMac: '⌘ ⇧ .',
+    step4TipMacAfter: ' (Mac) o ',
+    step4TipWin: 'Ctrl ⇧ .',
+    step4TipWinAfter:
+      ' (Win/Linux) para captar un elemento y que se apague solo. O hacé clic derecho en cualquier elemento y elegí ',
+    step4TipEm: 'Anotar elemento con DOMPin',
+    step4TipRest: ' — ideal para menús hover que desaparecen cuando hacés clic en otro lado.',
+    step5Title: 'Escribí tu comentario y dale Enter',
+    step5Tip:
+      'Vas a ver un marcador numerado sobre el elemento y el archivo aparece al instante en la carpeta de tu sesión.',
+  },
+  reconnect: {
+    message: 'El acceso a la carpeta expiró. Reconectá para continuar.',
+    last: (name: string) => `Última carpeta: ${name}`,
+    reconnect: 'Reconectar carpeta',
+    reconnecting: 'Reconectando…',
+    changeFolder: 'Cambiar carpeta…',
+  },
+  foot: {
+    notConfigured: 'Vault sin configurar',
+    unreachable: (name: string) => `Vault inaccesible: ${name}`,
+    vault: (name: string) => `Vault: ${name}`,
+    changeVault: 'Cambiar carpeta del vault',
+  },
+};

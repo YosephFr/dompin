@@ -29,15 +29,18 @@ function deriveDomain(url: string | null): string | null {
   }
 }
 
-export function relativeTime(ts: number): string {
+import type { Strings } from '../common/i18n/strings.en.js';
+
+export function relativeTime(ts: number, t?: Strings): string {
   const diff = Date.now() - ts;
-  if (diff < 30_000) return 'just now';
+  const r = t?.recent.relative;
+  if (diff < 30_000) return r?.now ?? 'just now';
   const m = Math.floor(diff / 60_000);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return r ? r.mAgo(m) : `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return r ? r.hAgo(h) : `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
+  if (d < 7) return r ? r.dAgo(d) : `${d}d ago`;
   return new Date(ts).toLocaleDateString();
 }
 

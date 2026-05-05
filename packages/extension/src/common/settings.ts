@@ -1,3 +1,6 @@
+export type ThemePreference = 'auto' | 'light' | 'dark';
+export type LocalePreference = 'auto' | 'en' | 'es';
+
 export interface Settings {
   schemaVersion: 2;
   allowlist: string[];
@@ -6,6 +9,10 @@ export interface Settings {
     enableWebSpeech: boolean;
     enableReactFiber: boolean;
     promptSessionName: boolean;
+  };
+  preferences: {
+    theme: ThemePreference;
+    locale: LocalePreference;
   };
 }
 
@@ -18,14 +25,19 @@ export const DEFAULT_SETTINGS: Settings = {
     enableReactFiber: true,
     promptSessionName: false,
   },
+  preferences: {
+    theme: 'auto',
+    locale: 'auto',
+  },
 };
 
 export function mergeSettings(partial: Partial<Settings> | undefined): Settings {
   const p = partial ?? {};
   const flags = { ...DEFAULT_SETTINGS.flags, ...(p.flags ?? {}) };
+  const preferences = { ...DEFAULT_SETTINGS.preferences, ...(p.preferences ?? {}) };
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 2, allowlist, flags };
+  return { schemaVersion: 2, allowlist, flags, preferences };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {
