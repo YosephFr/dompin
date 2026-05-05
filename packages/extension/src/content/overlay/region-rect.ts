@@ -1,4 +1,4 @@
-import type { RectInfo } from '@dompin/shared';
+import type { RectInfo } from '../../common/types.js';
 
 export class RegionRect {
   private el: HTMLDivElement;

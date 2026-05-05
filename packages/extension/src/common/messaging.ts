@@ -1,70 +1,68 @@
-import type { AnnotationPayload, AnnotationSummary, RectInfo } from '@dompin/shared';
+import type {
+  AnnotationPayload,
+  PinForPage,
+  RectInfo,
+  Session,
+  SessionListItem,
+  VaultStatus,
+} from './types.js';
 import type { Settings } from './settings.js';
 
-export interface ConnectionStatus {
-  state: 'disconnected' | 'connecting' | 'connected' | 'error';
-  lastError: string | null;
-  reconnectAttempt: number;
-  serverVersion: string | null;
-  serverProtocolVersion: string | null;
-}
-
-export interface PinForPage {
-  id: string;
-  ordinal: number;
-  selector: string | null;
-  region: RectInfo | null;
-  commentPreview: string;
-  createdAt: number;
-}
-
 export interface ExtensionState {
-  connection: ConnectionStatus;
-  pendingCount: number;
-  queue: AnnotationSummary[];
+  vault: VaultStatus;
   settings: Settings;
 }
 
 export type RequestMessage =
   | { kind: 'state:get' }
-  | { kind: 'pin'; payload: AnnotationPayload }
-  | { kind: 'cancel'; id: string }
-  | { kind: 'send-all' }
-  | { kind: 'clear' }
+  | { kind: 'vault:status' }
+  | { kind: 'vault:pickRoot'; rootName: string }
+  | { kind: 'vault:reconnect' }
+  | { kind: 'vault:clear' }
+  | { kind: 'vault:request-permission' }
+  | { kind: 'session:active'; tabId?: number }
+  | { kind: 'session:list'; domain?: string; limit?: number }
+  | { kind: 'session:rename'; sessionId: string; newName: string }
+  | { kind: 'session:new'; tabId: number; name?: string; pageUrl: string }
+  | { kind: 'session:archive'; sessionId: string }
+  | { kind: 'annotation:add'; payload: AnnotationPayload }
+  | { kind: 'annotation:cancel'; annotationId: string }
   | { kind: 'capture-viewport' }
   | { kind: 'capture-zoned'; rect: RectInfo; dpr: number; padding?: number }
-  | { kind: 'pins:for-url'; url: string }
+  | { kind: 'pins:for-tab' }
   | { kind: 'toggle-picker' }
-  | { kind: 'test-connection'; settings: Settings }
-  | { kind: 'reconnect' }
   | { kind: 'settings:save'; settings: Settings };
 
-export type Response<T> = { ok: true } & T extends never
-  ? { ok: false; error: string }
-  : ({ ok: true } & T) | { ok: false; error: string };
+export type Resp<T extends object = Record<string, never>> =
+  | ({ ok: true } & T)
+  | { ok: false; error: string };
 
-export type StateResponse = Response<{ state: ExtensionState }>;
-export type PinResponse = Response<{ id: string }>;
-export type SendAllResponse = Response<{ sent: number }>;
-export type CaptureResponse = Response<{ dataUrl: string }>;
-export type PinsForUrlResponse = Response<{ pins: PinForPage[] }>;
-export type TestConnectionResponse = Response<{ serverVersion: string; protocolVersion: string }>;
-export type Ok = Response<Record<string, never>>;
+export type StateResp = Resp<{ state: ExtensionState }>;
+export type VaultStatusResp = Resp<{ vault: VaultStatus }>;
+export type SessionResp = Resp<{ session: Session }>;
+export type SessionMaybeResp = Resp<{ session: Session | null }>;
+export type SessionListResp = Resp<{ sessions: SessionListItem[] }>;
+export type AnnotationAddResp = Resp<{
+  annotationId: string;
+  sessionId: string;
+  ordinal: number;
+  files: { relativePath: string; bytes: number }[];
+}>;
+export type CaptureResp = Resp<{ dataUrl: string }>;
+export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 
 export type TabCommand =
   | { kind: 'picker:toggle' }
   | { kind: 'picker:open' }
   | { kind: 'picker:close' }
-  | { kind: 'highlight'; selector: string; durationMs?: number }
-  | { kind: 'scrollTo'; selector: string; behavior?: ScrollBehavior }
   | { kind: 'pins:update' };
 
-export function sendRequest<T = unknown>(
+export function sendRequest<T extends object = Record<string, never>>(
   req: RequestMessage,
-): Promise<({ ok: true } & T) | { ok: false; error: string }> {
+): Promise<Resp<T>> {
   return new Promise((resolve) => {
     try {
-      chrome.runtime.sendMessage(req, (resp: ({ ok: true } & T) | { ok: false; error: string }) => {
+      chrome.runtime.sendMessage(req, (resp: Resp<T>) => {
         const err = chrome.runtime.lastError;
         if (err) {
           resolve({ ok: false, error: err.message ?? 'runtime error' });

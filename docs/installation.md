@@ -1,15 +1,14 @@
 # Installation
 
-> DOMPin is pre-1.0. The flow below is for development and early adopters. Once a stable release lands, a one-line installer will replace it.
+DOMPin is pre-1.0. The flow below is for development and early adopters. Once a stable release lands, a packaged build will replace the manual unpacked-extension step.
 
 ## Prerequisites
 
 - Node 20 or newer
 - pnpm 9 or newer
-- Chrome (or any Chromium-based browser)
-- An MCP-compatible coding agent (Claude Code, Cursor, etc.)
+- Chrome 120 or newer (or any Chromium-based browser with the File System Access API enabled)
 
-## 1. Build the project
+## 1. Build the extension
 
 ```bash
 git clone https://github.com/YosephFr/dompin.git
@@ -18,46 +17,42 @@ pnpm install
 pnpm build
 ```
 
-## 2. Load the extension
+The build emits `packages/extension/dist`. That directory is the loadable extension.
+
+## 2. Load the extension in Chrome
 
 1. Open `chrome://extensions`.
-2. Enable **Developer mode** (top right).
+2. Enable **Developer mode** in the top right.
 3. Click **Load unpacked**.
-4. Select the `packages/extension/dist` directory.
-5. Pin the DOMPin icon to your toolbar for quick access.
+4. Select `packages/extension/dist`.
+5. Pin the DOMPin icon to the toolbar so it is reachable on every page.
 
-## 3. Configure your MCP client
+## 3. Pick your vault folder
 
-Add the DOMPin server to your MCP client configuration. For Claude Code, edit your `.mcp.json` (or run `claude mcp add`):
+1. Right-click the DOMPin icon and choose **Options**, or open `chrome://extensions`, find DOMPin, and click **Details → Extension options**.
+2. Walk through the welcome wizard. When prompted, click **Choose folder…** and pick a directory anywhere on your machine. A dedicated folder you can later open in your editor is recommended.
+3. Chrome will ask once for read-write permission to that folder. Approve it.
 
-```json
-{
-  "mcpServers": {
-    "dompin": {
-      "command": "node",
-      "args": ["/absolute/path/to/dompin/packages/server/dist/index.js"]
-    }
-  }
-}
-```
+The extension stores the folder handle locally. It does not see anything outside that folder.
 
-After publishing to npm, this will become:
+## 4. Optional: bind a keyboard shortcut
 
-```json
-{
-  "mcpServers": {
-    "dompin": {
-      "command": "npx",
-      "args": ["-y", "@dompin/server"]
-    }
-  }
-}
-```
+The default shortcut for toggling the picker is `Cmd+Shift+.` on macOS and `Ctrl+Shift+.` elsewhere. To change it:
 
-## 4. Verify
+1. Open `chrome://extensions/shortcuts`.
+2. Find **DOMPin → Toggle the DOMPin element picker** and assign your preferred chord.
 
-1. Restart your MCP client.
-2. Open any web page.
-3. Press `Cmd+Shift+.` (Mac) or `Ctrl+Shift+.` (Windows / Linux) to toggle the picker.
-4. Hover over an element, click to anchor it, type a comment, hit send.
-5. In your MCP client, the agent should now have access to the pinned annotations via the `list_pinned_annotations` and `get_annotation` tools.
+## 5. Verify
+
+1. Open any web page.
+2. Click the DOMPin icon (or press the toggle shortcut). The picker overlay activates.
+3. Hover over an element, click to anchor it, type a comment, press Enter.
+4. Open the vault folder you picked. A new domain subfolder and a session subfolder should contain the annotation files.
+
+## Reconnecting after a browser restart
+
+Chrome may ask you to reauthorize folder access after a restart or after long periods of inactivity. The extension popup shows a **Reconnect folder** banner when this happens. Click it once and access is restored.
+
+## Allowed domains
+
+By default, the picker is enabled on every site. To restrict it, open the options page and edit the **Allowed domains** list. Use one entry per line; `*.example.com` matches every subdomain.

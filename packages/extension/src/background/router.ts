@@ -1,42 +1,44 @@
-import type { ServerMessage } from '@dompin/shared';
-import { PROTOCOL_VERSION, buildWsUrl } from '@dompin/shared';
-import type { ExtensionState, PinForPage, RequestMessage } from '../common/messaging.js';
+import type { RequestMessage, Resp } from '../common/messaging.js';
+import type { Session, VaultStatus } from '../common/types.js';
+import { mergeSettings } from '../common/settings.js';
+import { loadSettings, saveSettings } from '../common/storage.js';
+import { loadRootHandle, requestRootPermission } from '../common/vault-handle.js';
 import { createLogger } from '../common/logger.js';
-import { saveSettings, loadSettings } from '../common/storage.js';
-import { mergeSettings, type Settings } from '../common/settings.js';
+import { clearVault, ensureWritable, getStatus, invalidateHandleCache } from './vault.js';
 import {
-  clearQueue,
-  getPinsForUrl,
-  getQueue,
-  pushPin,
-  removePin,
-  summarize,
-  toSummary,
-} from './queue.js';
-import { captureViewport, cropDataUrl } from './screenshot.js';
-import type { WsClient } from './ws-client.js';
-import { broadcastToTabs, findTabByUrl, sendTabCommand } from './tab-bridge.js';
+  archiveSession,
+  bumpSessionAnnotation,
+  clearAllSessions,
+  ensureSession,
+  getActiveSession,
+  listSessions,
+  newSession,
+  renameSession,
+} from './session.js';
+import {
+  deleteAnnotation,
+  readSessionPins,
+  regenerateSessionReadme,
+  writeAnnotation,
+} from './vault-writer.js';
+import { sendTabCommand } from './tab-bridge.js';
+import { captureViewport, captureZoned } from './screenshot.js';
 
 const log = createLogger('router');
 
-interface RouterContext {
-  ws: WsClient;
-  getSettings: () => Settings;
-  setSettings: (next: Settings) => Promise<void>;
-  refreshConnection: () => void;
-}
+type RouterResp = Resp<Record<string, unknown>>;
 
-export function setupRouter(ctx: RouterContext): void {
-  chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+export function setupRouter(): void {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message !== 'object' || !('kind' in message)) {
       return false;
     }
     const req = message as RequestMessage;
-    handle(req, sender, ctx)
+    handle(req, sender)
       .then((resp) => sendResponse(resp))
       .catch((e) => {
-        log.error('handler error', e);
-        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+        log.error('handler threw', req.kind, e);
+        sendResponse(err(e instanceof Error ? e.message : String(e)));
       });
     return true;
   });
@@ -45,198 +47,192 @@ export function setupRouter(ctx: RouterContext): void {
 async function handle(
   req: RequestMessage,
   sender: chrome.runtime.MessageSender,
-  ctx: RouterContext,
-): Promise<unknown> {
+): Promise<RouterResp> {
   switch (req.kind) {
-    case 'state:get':
-      return getState(ctx);
-    case 'pin':
-      await pushPin(req.payload);
-      ctx.ws.send({ type: 'annotation:new', payload: req.payload });
-      return { ok: true, id: req.payload.id };
-    case 'cancel':
-      await removePin(req.id);
-      ctx.ws.send({ type: 'annotation:cancel', id: req.id });
-      return { ok: true };
-    case 'send-all': {
-      const queue = await getQueue();
-      const sent = ctx.ws.send({ type: 'queue:replace', payloads: queue });
-      if (!sent) {
-        return { ok: false, error: 'Server not connected' };
-      }
-      await clearQueue();
-      ctx.ws.send({ type: 'queue:clear' });
-      return { ok: true, sent: queue.length };
+    case 'state:get': {
+      const [vault, settings] = await Promise.all([getStatus(), loadSettings()]);
+      return ok({ state: { vault, settings } });
     }
-    case 'clear':
-      await clearQueue();
-      ctx.ws.send({ type: 'queue:clear' });
-      return { ok: true };
-    case 'capture-viewport': {
-      if (sender.tab?.id == null) {
-        return { ok: false, error: 'No source tab' };
+    case 'vault:status': {
+      return ok({ vault: await getStatus() });
+    }
+    case 'vault:pickRoot': {
+      invalidateHandleCache();
+      return ok({ vault: await refreshedStatus() });
+    }
+    case 'vault:reconnect': {
+      invalidateHandleCache();
+      return ok({ vault: await getStatus() });
+    }
+    case 'vault:request-permission': {
+      const handle = await loadRootHandle();
+      if (handle) {
+        await requestRootPermission().catch(() => 'denied' as const);
       }
-      const dataUrl = await captureViewport(sender.tab.id);
-      return { ok: true, dataUrl };
+      invalidateHandleCache();
+      return ok({ vault: await getStatus() });
+    }
+    case 'vault:clear': {
+      await clearVault();
+      await clearAllSessions();
+      return ok({ vault: await getStatus() });
+    }
+    case 'session:active': {
+      const tabId = await resolveTabId(req.tabId, sender);
+      if (tabId == null) return ok({ session: null });
+      const session = await getActiveSession(tabId);
+      return ok({ session });
+    }
+    case 'session:list': {
+      const sessions = await listSessions(req.domain, req.limit);
+      return ok({ sessions });
+    }
+    case 'session:rename': {
+      const session = await renameSession(req.sessionId, req.newName);
+      if (session.annotationCount > 0) {
+        await regenerateSessionReadme(session).catch((e) =>
+          log.debug('rename readme regen skipped', e),
+        );
+      }
+      return ok({ session });
+    }
+    case 'session:new': {
+      const session = await newSession(req.tabId, req.pageUrl, null, req.name);
+      return ok({ session });
+    }
+    case 'session:archive': {
+      await archiveSession(req.sessionId);
+      return ok({});
+    }
+    case 'annotation:add': {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== 'number') return err('annotation:add requires a tab sender');
+      try {
+        await ensureWritable();
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+      const pageUrl = req.payload.page.url;
+      const pageTitle = req.payload.page.title;
+      const session = await ensureSession(tabId, pageUrl, pageTitle);
+      try {
+        const result = await writeAnnotation(session, req.payload);
+        await bumpSessionAnnotation(session.id, +1, pageUrl, pageTitle);
+        return ok({
+          annotationId: req.payload.id,
+          sessionId: session.id,
+          ordinal: result.ordinal,
+          files: result.files,
+        });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+    case 'annotation:cancel': {
+      const session = await findSessionForCancel(sender, req.annotationId);
+      if (!session) return err('Annotation not found in any active session');
+      const result = await deleteAnnotation(session, req.annotationId);
+      if (!result.ok) return err(result.error);
+      await bumpSessionAnnotation(session.id, -1);
+      return ok({});
+    }
+    case 'capture-viewport': {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== 'number') return err('capture-viewport requires a tab sender');
+      try {
+        const dataUrl = await captureViewport(tabId);
+        return ok({ dataUrl });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
     }
     case 'capture-zoned': {
-      if (sender.tab?.id == null) {
-        return { ok: false, error: 'No source tab' };
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== 'number') return err('capture-zoned requires a tab sender');
+      try {
+        const dataUrl = await captureZoned(tabId, req.rect, req.dpr, req.padding);
+        return ok({ dataUrl });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
       }
-      const viewport = await captureViewport(sender.tab.id);
-      const dataUrl = await cropDataUrl(viewport, req.rect, req.dpr, req.padding ?? 16);
-      return { ok: true, dataUrl };
     }
-    case 'pins:for-url': {
-      const pins = await getPinsForUrl(req.url);
-      const result: PinForPage[] = pins.map((p, i) => ({
-        id: p.id,
-        ordinal: i + 1,
-        selector: p.element?.selector ?? null,
-        region: p.region?.rect ?? null,
-        commentPreview: toSummary(p).commentPreview,
-        createdAt: p.createdAt,
-      }));
-      return { ok: true, pins: result };
+    case 'pins:for-tab': {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== 'number') return ok({ pins: [] });
+      const session = await getActiveSession(tabId);
+      if (!session) return ok({ pins: [] });
+      const pins = await readSessionPins(session);
+      return ok({ pins });
     }
     case 'toggle-picker': {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!tab?.id) return { ok: false, error: 'No active tab' };
-      await sendTabCommand(tab.id, { kind: 'picker:toggle' });
-      return { ok: true };
+      const tabId = await resolveActiveTabId(sender);
+      if (typeof tabId !== 'number') return err('No active tab');
+      await sendTabCommand(tabId, { kind: 'picker:toggle' });
+      return ok({});
     }
-    case 'reconnect':
-      ctx.ws.reconnect();
-      return { ok: true };
-    case 'settings:save':
-      await ctx.setSettings(req.settings);
-      ctx.refreshConnection();
-      return { ok: true };
-    case 'test-connection':
-      return testConnection(req.settings);
-    default:
-      return { ok: false, error: 'Unknown request' };
+    case 'settings:save': {
+      await saveSettings(mergeSettings(req.settings));
+      return ok({});
+    }
   }
 }
 
-async function getState(ctx: RouterContext): Promise<{ ok: true; state: ExtensionState }> {
-  const queue = await summarize();
-  const settings = ctx.getSettings();
-  return {
-    ok: true,
-    state: {
-      connection: ctx.ws.getStatus(),
-      pendingCount: queue.length,
-      queue,
-      settings,
-    },
-  };
+async function refreshedStatus(): Promise<VaultStatus> {
+  return getStatus();
 }
 
-async function testConnection(
-  partial: Settings,
-): Promise<
-  { ok: true; serverVersion: string; protocolVersion: string } | { ok: false; error: string }
-> {
-  const settings = mergeSettings(partial);
-  const url = buildWsUrl(settings.ws.host, settings.ws.port, settings.ws.path);
-  return new Promise((resolve) => {
-    let socket: WebSocket;
-    try {
-      socket = new WebSocket(url);
-    } catch (e) {
-      resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
-      return;
+async function findSessionForCancel(
+  sender: chrome.runtime.MessageSender,
+  annotationId: string,
+): Promise<Session | null> {
+  const tabId = sender.tab?.id;
+  if (typeof tabId === 'number') {
+    const session = await getActiveSession(tabId);
+    if (session) return session;
+  }
+  const sessions = await listSessions();
+  for (const item of sessions) {
+    const pins = await readSessionPins(item);
+    if (pins.some((p) => p.id === annotationId)) {
+      return {
+        id: item.id,
+        domain: item.domain,
+        domainFolder: item.domainFolder,
+        name: item.name,
+        folder: item.folder,
+        startedAt: item.startedAt,
+        lastWriteAt: item.lastWriteAt,
+        annotationCount: item.annotationCount,
+        status: item.status,
+      };
     }
-    let settled = false;
-    const finish = (
-      r:
-        | { ok: true; serverVersion: string; protocolVersion: string }
-        | { ok: false; error: string },
-    ) => {
-      if (settled) return;
-      settled = true;
-      try {
-        socket.close();
-      } catch {
-        /* noop */
-      }
-      resolve(r);
-    };
-    const to = setTimeout(() => finish({ ok: false, error: 'Timeout (5s)' }), 5000);
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({
-          type: 'hello',
-          protocolVersion: PROTOCOL_VERSION,
-          extensionVersion: chrome.runtime.getManifest().version,
-        }),
-      );
-    };
-    socket.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(typeof ev.data === 'string' ? ev.data : String(ev.data));
-        if (data?.type === 'welcome') {
-          clearTimeout(to);
-          finish({
-            ok: true,
-            serverVersion: String(data.serverVersion ?? 'unknown'),
-            protocolVersion: String(data.protocolVersion ?? 'unknown'),
-          });
-        }
-      } catch {
-        /* noop */
-      }
-    };
-    socket.onerror = () => {
-      clearTimeout(to);
-      finish({ ok: false, error: 'Connection failed' });
-    };
-    socket.onclose = (ev) => {
-      clearTimeout(to);
-      finish({ ok: false, error: ev.reason || 'Connection closed' });
-    };
-  });
+  }
+  return null;
 }
 
-export async function relayServerCommand(msg: ServerMessage): Promise<void> {
-  if (msg.type === 'highlight') {
-    await dispatchToMatchingTabs(msg.url, {
-      kind: 'highlight',
-      selector: msg.selector,
-      durationMs: msg.durationMs,
-    });
-  } else if (msg.type === 'scrollTo') {
-    await dispatchToMatchingTabs(msg.url, {
-      kind: 'scrollTo',
-      selector: msg.selector,
-      behavior: msg.behavior,
-    });
+async function resolveTabId(
+  explicit: number | undefined,
+  sender: chrome.runtime.MessageSender,
+): Promise<number | null> {
+  if (typeof explicit === 'number') return explicit;
+  if (typeof sender.tab?.id === 'number') return sender.tab.id;
+  return resolveActiveTabId(sender);
+}
+
+async function resolveActiveTabId(sender: chrome.runtime.MessageSender): Promise<number | null> {
+  if (typeof sender.tab?.id === 'number') return sender.tab.id;
+  try {
+    const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return typeof t?.id === 'number' ? t.id : null;
+  } catch {
+    return null;
   }
 }
 
-async function dispatchToMatchingTabs(
-  preferredUrl: string | undefined,
-  cmd: import('../common/messaging.js').TabCommand,
-): Promise<void> {
-  if (preferredUrl) {
-    const tabId = await findTabByUrl(preferredUrl);
-    if (tabId != null) {
-      const ok = await sendTabCommand(tabId, cmd);
-      if (ok) return;
-    }
-    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (active?.id) {
-      await sendTabCommand(active.id, cmd);
-      return;
-    }
-  } else {
-    await broadcastToTabs(cmd);
-  }
+function ok<T extends Record<string, unknown>>(data: T): { ok: true } & T {
+  return { ok: true, ...data };
 }
 
-export async function bootstrapSettings(): Promise<Settings> {
-  const settings = await loadSettings();
-  await saveSettings(settings);
-  return settings;
+function err(message: string): { ok: false; error: string } {
+  return { ok: false, error: message };
 }

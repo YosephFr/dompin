@@ -1,4 +1,4 @@
-import type { RectInfo } from '@dompin/shared';
+import type { RectInfo } from '../../common/types.js';
 import type { Highlight } from '../overlay/highlight.js';
 import type { RegionRect } from '../overlay/region-rect.js';
 import { applyCrosshairCursor, removeCrosshairCursor } from './cursor-style.js';

@@ -1,280 +1,426 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import type { Settings } from '../common/settings.js';
+import type { VaultStatus } from '../common/types.js';
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
-import {
-  DEFAULT_SETTINGS,
-  validateHost,
-  validatePath,
-  validatePort,
-  type Settings,
-} from '../common/settings.js';
+import { mergeSettings } from '../common/settings.js';
+import { clearRootHandle, requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
 
-type TestStatus =
-  | { kind: 'idle' }
-  | { kind: 'testing' }
-  | { kind: 'ok'; serverVersion: string; protocolVersion: string }
-  | { kind: 'error'; message: string };
+type Step = 'welcome' | 'pick' | 'done' | 'settings';
+
+type FlagKey = keyof Settings['flags'];
+
+const FLAGS: { key: FlagKey; label: string; description: string }[] = [
+  {
+    key: 'captureViewportScreenshot',
+    label: 'Capture viewport screenshot per pin',
+    description: 'Saves the visible page area as a PNG alongside each annotation.',
+  },
+  {
+    key: 'captureZonedScreenshot',
+    label: 'Capture zoomed element screenshot per pin',
+    description: 'Saves a tighter PNG centered on the picked element with surrounding context.',
+  },
+  {
+    key: 'captureNetworkFailures',
+    label: 'Include recent network failures',
+    description: 'Records failed network requests from the page in each annotation file.',
+  },
+  {
+    key: 'enableWebSpeech',
+    label: 'Voice memos (Web Speech API)',
+    description: 'Lets you dictate the comment instead of typing. Voice input stays on-device.',
+  },
+  {
+    key: 'enableReactFiber',
+    label: 'React Fiber introspection',
+    description: 'Adds component name, owner chain, and source location for React apps.',
+  },
+  {
+    key: 'promptSessionName',
+    label: 'Ask for a name when starting a session',
+    description: 'Shows a name prompt instead of generating one from the page title.',
+  },
+];
 
 export function App(): JSX.Element {
+  const [state, setState] = useState<ExtensionState | null>(null);
+  const [step, setStep] = useState<Step>('welcome');
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const [savedFolderName, setSavedFolderName] = useState<string | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
-  const [saved, setSaved] = useState<Settings | null>(null);
-  const [test, setTest] = useState<TestStatus>({ kind: 'idle' });
-  const [savedTick, setSavedTick] = useState(false);
+  const [allowlistText, setAllowlistText] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      const r = await sendRequest<{ state: ExtensionState }>({ kind: 'state:get' });
-      if (r.ok) {
-        setDraft(r.state.settings);
-        setSaved(r.state.settings);
-      } else {
-        setDraft(DEFAULT_SETTINGS);
-        setSaved(DEFAULT_SETTINGS);
-      }
-    })();
+    void loadState();
   }, []);
 
-  const errors = useMemo(() => validateAll(draft), [draft]);
-  const dirty = useMemo(() => {
-    if (!draft || !saved) return false;
-    return JSON.stringify(draft) !== JSON.stringify(saved);
-  }, [draft, saved]);
-  const canSave = dirty && Object.keys(errors).length === 0;
-
-  if (!draft) {
-    return <div className="loading">Loading…</div>;
+  async function loadState(): Promise<void> {
+    const resp = await sendRequest<{ state: ExtensionState }>({ kind: 'state:get' });
+    if (!resp.ok) {
+      setSaveError(resp.error);
+      return;
+    }
+    setState(resp.state);
+    setDraft(resp.state.settings);
+    setAllowlistText(resp.state.settings.allowlist.join('\n'));
+    if (resp.state.vault.configured) {
+      setStep('settings');
+      setSavedFolderName(resp.state.vault.rootName);
+    } else {
+      setStep('welcome');
+    }
   }
 
-  const update = (patch: Partial<Settings> | ((s: Settings) => Settings)) => {
-    setSavedTick(false);
-    setDraft((prev) =>
-      prev == null ? prev : typeof patch === 'function' ? patch(prev) : { ...prev, ...patch },
-    );
-  };
-
-  const handleSave = async () => {
-    if (!canSave || !draft) return;
-    const r = await sendRequest({ kind: 'settings:save', settings: draft });
-    if (r.ok) {
-      setSaved(draft);
-      setSavedTick(true);
-      window.setTimeout(() => setSavedTick(false), 2000);
-    }
-  };
-
-  const handleReset = () => {
-    setDraft({ ...DEFAULT_SETTINGS });
-  };
-
-  const handleTest = async () => {
-    if (!draft) return;
-    setTest({ kind: 'testing' });
-    const r = await sendRequest<{ serverVersion: string; protocolVersion: string }>({
-      kind: 'test-connection',
-      settings: draft,
+  const dirty = useMemo(() => {
+    if (!state || !draft) return false;
+    if (!sameAllowlist(parseAllowlist(allowlistText), draft.allowlist)) return true;
+    return !sameSettings(state.settings, {
+      ...draft,
+      allowlist: parseAllowlist(allowlistText),
     });
-    if (r.ok) {
-      setTest({
-        kind: 'ok',
-        serverVersion: r.serverVersion,
-        protocolVersion: r.protocolVersion,
+  }, [state, draft, allowlistText]);
+
+  async function pickFolder(): Promise<void> {
+    setPickError(null);
+    setPicking(true);
+    try {
+      const handle = await window.showDirectoryPicker({
+        id: 'dompin-vault',
+        mode: 'readwrite',
       });
-    } else {
-      setTest({ kind: 'error', message: r.error });
+      await saveRootHandle(handle);
+      const r = await sendRequest<{ vault: VaultStatus }>({
+        kind: 'vault:pickRoot',
+        rootName: handle.name,
+      });
+      if (!r.ok) throw new Error(r.error);
+      setState((prev) => (prev ? { ...prev, vault: r.vault } : prev));
+      setSavedFolderName(handle.name);
+      setStep('done');
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.name === 'AbortError') {
+        setPickError(null);
+      } else {
+        setPickError(err.message || 'Could not access the selected folder.');
+      }
+    } finally {
+      setPicking(false);
     }
-  };
+  }
+
+  async function reconnectFolder(): Promise<void> {
+    setReconnectError(null);
+    setReconnecting(true);
+    try {
+      const granted = await requestRootPermission();
+      if (granted === 'granted') {
+        const r = await sendRequest<{ vault: VaultStatus }>({
+          kind: 'vault:request-permission',
+        });
+        if (!r.ok) throw new Error(r.error);
+        setState((prev) => (prev ? { ...prev, vault: r.vault } : prev));
+        setSavedFolderName(r.vault.rootName);
+        return;
+      }
+      const handle = await window.showDirectoryPicker({
+        id: 'dompin-vault',
+        mode: 'readwrite',
+      });
+      await saveRootHandle(handle);
+      const r = await sendRequest<{ vault: VaultStatus }>({
+        kind: 'vault:pickRoot',
+        rootName: handle.name,
+      });
+      if (!r.ok) throw new Error(r.error);
+      setState((prev) => (prev ? { ...prev, vault: r.vault } : prev));
+      setSavedFolderName(handle.name);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.name !== 'AbortError') setReconnectError(err.message);
+    } finally {
+      setReconnecting(false);
+    }
+  }
+
+  async function changeFolder(): Promise<void> {
+    await clearRootHandle();
+    const r = await sendRequest<{ vault: VaultStatus }>({ kind: 'vault:clear' });
+    if (r.ok) {
+      setState((prev) => (prev ? { ...prev, vault: r.vault } : prev));
+      setSavedFolderName(null);
+      setStep('pick');
+    }
+  }
+
+  function setFlag(key: FlagKey, value: boolean): void {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            flags: { ...d.flags, [key]: value },
+          }
+        : d,
+    );
+  }
+
+  async function saveSettings(): Promise<void> {
+    if (!draft) return;
+    setSavingSettings(true);
+    setSaveError(null);
+    try {
+      const next = mergeSettings({
+        ...draft,
+        allowlist: parseAllowlist(allowlistText),
+      });
+      const resp = await sendRequest({ kind: 'settings:save', settings: next });
+      if (!resp.ok) {
+        setSaveError(resp.error);
+        return;
+      }
+      setState((prev) => (prev ? { ...prev, settings: next } : prev));
+      setDraft(next);
+      setAllowlistText(next.allowlist.join('\n'));
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  if (!state) {
+    return (
+      <div className="page">
+        <div className="loading">Loading…</div>
+      </div>
+    );
+  }
+
+  if (step === 'welcome') {
+    return (
+      <div className="page">
+        <PageHeader title="Welcome to DOMPin" />
+        <section className="section wizard">
+          <ol className="wizard-list">
+            <li>Pin elements on any web page with a click.</li>
+            <li>
+              Each pin becomes a Markdown file with your comment, the element data, and screenshots.
+            </li>
+            <li>
+              Hand the folder to your AI coding agent — Claude Code, Cursor, or any tool that reads
+              local files.
+            </li>
+          </ol>
+          <div className="wizard-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setStep('pick')}>
+              Continue
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (step === 'pick') {
+    return (
+      <div className="page">
+        <PageHeader title="Choose your vault folder" />
+        <section className="section wizard">
+          <p className="section-hint">
+            Choose a folder where DOMPin will write annotations. We recommend a dedicated folder you
+            can later open in your editor.
+          </p>
+          {pickError ? <div className="status-error inline-error">{pickError}</div> : null}
+          <div className="wizard-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={pickFolder}
+              disabled={picking}
+            >
+              {picking ? 'Opening picker…' : 'Choose folder…'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setStep('welcome')}
+              disabled={picking}
+            >
+              Back
+            </button>
+          </div>
+          <p className="section-hint quiet">
+            DOMPin only reads and writes inside this folder. It cannot access anything outside it.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  if (step === 'done') {
+    return (
+      <div className="page">
+        <PageHeader title="You're all set" />
+        <section className="section wizard">
+          <p>
+            Vault folder: <code>{savedFolderName ?? 'selected folder'}</code>
+          </p>
+          <p className="section-hint">
+            Click the DOMPin icon on any page to start pinning. Right-click the icon to open the
+            session panel.
+          </p>
+          <div className="wizard-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setStep('settings')}>
+              Open settings
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => window.close()}>
+              Done
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // settings
+  const vault = state.vault;
+  const flags = draft?.flags ?? state.settings.flags;
 
   return (
     <div className="page">
-      <header className="page-header">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <h1>DOMPin Settings</h1>
-        </div>
-        <p className="subtitle">
-          Local connection to the DOMPin MCP server, capture preferences, and per-domain access.
-        </p>
-      </header>
+      <PageHeader title="DOMPin settings" />
 
-      <Section title="Server connection">
-        <div className="grid">
-          <Field label="Host" error={errors.host}>
-            <input
-              type="text"
-              value={draft.ws.host}
-              onChange={(e) => update((s) => ({ ...s, ws: { ...s.ws, host: e.target.value } }))}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </Field>
-          <Field label="Port" error={errors.port}>
-            <input
-              type="number"
-              min={1}
-              max={65535}
-              value={draft.ws.port}
-              onChange={(e) =>
-                update((s) => ({ ...s, ws: { ...s.ws, port: Number(e.target.value) } }))
-              }
-            />
-          </Field>
-          <Field label="Path" error={errors.path}>
-            <input
-              type="text"
-              value={draft.ws.path}
-              onChange={(e) => update((s) => ({ ...s, ws: { ...s.ws, path: e.target.value } }))}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </Field>
+      <section className="section">
+        <div className="section-head">
+          <h2>Vault folder</h2>
+          {vault.configured && !vault.needsReconnect ? (
+            <span className="status-ok">Connected</span>
+          ) : vault.needsReconnect ? (
+            <span className="status-error">Needs reconnect</span>
+          ) : (
+            <span className="status-error">Not configured</span>
+          )}
         </div>
-        <div className="row">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleTest}
-            disabled={Object.keys(errors).length > 0}
-          >
-            {test.kind === 'testing' ? 'Testing…' : 'Test connection'}
-          </button>
-          {test.kind === 'ok' ? (
-            <span className="status-ok">
-              Server v{test.serverVersion} · protocol {test.protocolVersion}
-            </span>
-          ) : null}
-          {test.kind === 'error' ? <span className="status-error">{test.message}</span> : null}
-        </div>
-      </Section>
-
-      <Section title="Allowed domains">
         <p className="section-hint">
-          Limit where DOMPin runs. Use <code>*</code> to allow every site, or wildcards like
-          <code> *.example.com</code>. One pattern per line.
+          Annotations are written here. Each domain becomes a subfolder; each session a folder
+          inside that.
+        </p>
+        <div className="vault-row">
+          <div className="vault-name">
+            {savedFolderName ?? vault.rootName ?? 'No folder selected'}
+          </div>
+          <div className="vault-stats">
+            {vault.totalSessions} sessions · {vault.totalAnnotations} annotations
+          </div>
+        </div>
+        {reconnectError ? <div className="status-error inline-error">{reconnectError}</div> : null}
+        <div className="row">
+          {vault.needsReconnect ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={reconnectFolder}
+              disabled={reconnecting}
+            >
+              {reconnecting ? 'Reconnecting…' : 'Reconnect'}
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-secondary" onClick={changeFolder}>
+            Change folder…
+          </button>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Allowed domains</h2>
+        </div>
+        <p className="section-hint">
+          One domain per line. Use <code>*</code> to allow every site, or patterns like{' '}
+          <code>*.example.com</code>.
         </p>
         <textarea
           className="textarea"
-          rows={5}
+          value={allowlistText}
           spellCheck={false}
-          value={draft.allowlist.join('\n')}
-          onChange={(e) =>
-            update((s) => ({
-              ...s,
-              allowlist: e.target.value
-                .split(/\n+/)
-                .map((l) => l.trim())
-                .filter(Boolean),
-            }))
-          }
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setAllowlistText(e.target.value)}
         />
-      </Section>
+      </section>
 
-      <Section title="Capture options">
-        <Toggle
-          label="Capture recent network failures"
-          description="Include failed network requests in each annotation payload."
-          checked={draft.flags.captureNetworkFailures}
-          onChange={(v) =>
-            update((s) => ({ ...s, flags: { ...s.flags, captureNetworkFailures: v } }))
-          }
-        />
-        <Toggle
-          label="Voice memos"
-          description="Use the browser's speech recognition to dictate the comment."
-          checked={draft.flags.enableWebSpeech}
-          onChange={(v) => update((s) => ({ ...s, flags: { ...s.flags, enableWebSpeech: v } }))}
-        />
-        <Toggle
-          label="React Fiber introspection"
-          description="Read component name, owner chain, and props from React internals when present."
-          checked={draft.flags.enableReactFiber}
-          onChange={(v) => update((s) => ({ ...s, flags: { ...s.flags, enableReactFiber: v } }))}
-        />
-      </Section>
+      <section className="section">
+        <div className="section-head">
+          <h2>Capture options</h2>
+        </div>
+        {FLAGS.map((f) => (
+          <label key={f.key} className="toggle">
+            <span className="toggle-text">
+              <span className="toggle-label">{f.label}</span>
+              <span className="toggle-description">{f.description}</span>
+            </span>
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={flags[f.key]}
+              onChange={(e) => setFlag(f.key, e.target.checked)}
+            />
+            <span className="toggle-track">
+              <span className="toggle-thumb" />
+            </span>
+          </label>
+        ))}
+      </section>
 
       <footer className="page-footer">
+        {saveError ? <span className="status-error">{saveError}</span> : null}
+        <span className="footer-spacer" />
         <button
           type="button"
-          className="btn btn-ghost"
-          onClick={handleReset}
-          disabled={!dirty && JSON.stringify(draft) === JSON.stringify(DEFAULT_SETTINGS)}
+          className="btn btn-primary"
+          disabled={!dirty || savingSettings}
+          onClick={saveSettings}
         >
-          Reset to defaults
-        </button>
-        <div className="footer-spacer" />
-        {savedTick ? <span className="status-ok">Saved</span> : null}
-        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
-          Save changes
+          {savingSettings ? 'Saving…' : 'Save changes'}
         </button>
       </footer>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
+function PageHeader({ title }: { title: string }): JSX.Element {
   return (
-    <section className="section">
-      <h2>{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}): JSX.Element {
-  return (
-    <label className={`field${error ? ' field-error' : ''}`}>
-      <span className="field-label">{label}</span>
-      {children}
-      {error ? <span className="field-message">{error}</span> : null}
-    </label>
-  );
-}
-
-function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}): JSX.Element {
-  return (
-    <label className="toggle">
-      <div className="toggle-text">
-        <span className="toggle-label">{label}</span>
-        <span className="toggle-description">{description}</span>
+    <header className="page-header">
+      <div className="brand">
+        <span className="brand-mark" aria-hidden="true" />
+        <h1>{title}</h1>
       </div>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="toggle-input"
-      />
-      <span className="toggle-track" aria-hidden="true">
-        <span className="toggle-thumb" />
-      </span>
-    </label>
+    </header>
   );
 }
 
-function validateAll(draft: Settings | null): Record<string, string> {
-  if (!draft) return {};
-  const out: Record<string, string> = {};
-  const h = validateHost(draft.ws.host);
-  if (h) out.host = h;
-  const p = validatePort(draft.ws.port);
-  if (p) out.port = p;
-  const pp = validatePath(draft.ws.path);
-  if (pp) out.path = pp;
-  return out;
+function parseAllowlist(text: string): string[] {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  return lines.length > 0 ? lines : ['*'];
+}
+
+function sameAllowlist(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function sameSettings(a: Settings, b: Settings): boolean {
+  if (!sameAllowlist(a.allowlist, b.allowlist)) return false;
+  for (const k of Object.keys(a.flags) as FlagKey[]) {
+    if (a.flags[k] !== b.flags[k]) return false;
+  }
+  return true;
 }

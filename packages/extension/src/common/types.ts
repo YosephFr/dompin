@@ -101,21 +101,53 @@ export interface NetworkEntry {
   timestamp: number;
 }
 
-export interface ServerStatus {
-  protocolVersion: string;
-  serverVersion: string;
-  uptimeMs: number;
-  pendingCount: number;
-  extensionConnected: boolean;
-}
-
-export interface AnnotationSummary {
-  id: string;
-  createdAt: number;
-  pageUrl: string;
-  pageTitle: string;
-  selector: string | null;
-  commentPreview: string;
-}
-
 export type AnnotationId = string;
+
+export interface VaultStatus {
+  configured: boolean;
+  rootName: string | null;
+  hasPermission: boolean;
+  needsReconnect: boolean;
+  totalSessions: number;
+  totalAnnotations: number;
+}
+
+export type SessionStatus = 'active' | 'archived';
+
+export interface Session {
+  id: string;
+  domain: string;
+  domainFolder: string;
+  name: string;
+  folder: string;
+  startedAt: number;
+  lastWriteAt: number | null;
+  annotationCount: number;
+  status: SessionStatus;
+}
+
+export interface SessionListItem extends Session {
+  pageUrl: string | null;
+  pageTitle: string | null;
+}
+
+export interface AnnotationRecord {
+  ordinal: number;
+  sessionId: string;
+  payload: AnnotationPayload;
+  files: WrittenFile[];
+}
+
+export interface WrittenFile {
+  relativePath: string;
+  bytes: number;
+}
+
+export interface PinForPage {
+  id: string;
+  ordinal: number;
+  selector: string | null;
+  region: RectInfo | null;
+  commentPreview: string;
+  createdAt: number;
+}

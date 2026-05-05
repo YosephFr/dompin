@@ -1,4 +1,4 @@
-import type { ConsoleEntry, ConsoleLevel } from '@dompin/shared';
+import type { ConsoleEntry, ConsoleLevel } from '../common/types.js';
 
 const BUFFER_WINDOW_MS = 60_000;
 const MAX_ENTRIES = 500;

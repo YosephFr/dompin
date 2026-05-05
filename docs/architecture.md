@@ -1,39 +1,61 @@
 # Architecture
 
-DOMPin is a small distributed system with three pieces:
+DOMPin is a single Chrome extension that writes annotations directly to a folder on the user's machine. There is no server, no WebSocket, and no inter-process protocol. The integration surface is the folder layout itself, documented in [file-schema.md](file-schema.md).
 
-1. **Extension content script** runs in every page you visit (subject to allowlist). It owns the picker overlay, the comment popup, and the per-element capture logic. It talks to the background service worker via `chrome.runtime` messages.
+## Surfaces
 
-2. **Extension background service worker** owns the persistent annotation queue (in `chrome.storage.local`) and the WebSocket client to the local MCP server. It also owns `chrome.tabs.captureVisibleTab` for viewport screenshots, since content scripts cannot capture screenshots themselves.
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Chrome (your real session)                                   │
+│                                                              │
+│  ┌──────────────────────────┐   ┌──────────────────────────┐ │
+│  │ Content script           │   │ Background service worker│ │
+│  │ • picker overlay         │◀─▶│ • session bookkeeping    │ │
+│  │ • comment popup          │   │ • settings + vault state │ │
+│  │ • DOM + style capture    │   │ • viewport screenshots   │ │
+│  └────────────┬─────────────┘   │ • file writes (FS API)   │ │
+│               │                 └────────────┬─────────────┘ │
+│               │                              │               │
+│               ▼                              ▼               │
+│        ┌──────────────────────────────────────────┐          │
+│        │ Popup window + Options page (React)      │          │
+│        │ • setup wizard, settings, session panel  │          │
+│        └──────────────────────────────────────────┘          │
+└──────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                  Local folder you picked
+                  (organized by domain → session)
+```
 
-3. **MCP server** is a small Node process that speaks two protocols at once:
-   - **MCP over stdio** with the coding agent (Claude Code, Cursor, etc.).
-   - **WebSocket** with the extension on `127.0.0.1:8930`.
+## Components
 
-The server holds an in-memory queue of pinned annotations. The agent reads them via MCP tools, consumes them when handled, and can emit bidirectional commands (`highlight`, `scrollTo`) that are forwarded to the extension over WebSocket.
+- **Content script.** One per tab, isolated in a Shadow DOM. Owns the picker overlay, the comment popup, the per-element capture pipeline (selector, XPath, computed styles, React Fiber introspection, console buffer), and the optional voice memo input. Sends a finished annotation to the background worker.
+- **Background service worker.** The single coordinator. Owns the session list, the active-session-per-tab mapping, the vault status, the settings, and the viewport screenshot capability (`chrome.tabs.captureVisibleTab`). Writes annotations to disk through the File System Access API using the directory handle persisted in IndexedDB.
+- **Popup window.** Opened by right-clicking the extension icon. Shows the active session for the current tab, recent sessions on that domain, and the controls to toggle the picker, rename the session, or start a new one.
+- **Options page.** A welcome wizard the first time it runs (welcome → pick folder → confirmation), and a settings page after that (vault folder management, allowlist, capture flags).
 
-## Why a local server
+## Data and storage
 
-A pure extension cannot expose itself directly to a stdio-based MCP client. The local MCP server is the bridge. It also gives us a clean place to enforce protocol versioning, message validation, and allowlists.
+- **Settings** live in `chrome.storage.local` under the key `dompin:settings:v2`.
+- **Sessions** are tracked by the background worker, keyed by tab ID for the active mapping and persisted in `chrome.storage.local` for history.
+- **Vault root handle** lives in IndexedDB (database `dompin`, store `handles`). The handle is what the File System Access API gives you back after a `showDirectoryPicker` call. It survives browser restarts but may need to be re-authorized.
+- **Annotation files** live in the user-chosen folder. Nothing else is stored there by the extension.
+
+## Permission model
+
+DOMPin requests three things from the browser:
+
+- `<all_urls>` host permission, so the picker can attach to any page.
+- `chrome.tabs.captureVisibleTab`, for viewport screenshots.
+- A user-granted directory handle, scoped to the single folder the user picked.
+
+There is no remote endpoint, no telemetry, and no broad filesystem access.
 
 ## Why MV3
 
-Manifest V3 is the only path forward for new Chrome extensions. The service worker model is more constrained than V2 background pages (it sleeps, has no DOM, no `XMLHttpRequest`), but for our use case the constraints are workable: WebSocket connections are kept alive while the worker is awake, and we re-establish on demand.
+Manifest V3 is the only path forward for new Chrome extensions. The service worker model is more constrained than V2 background pages — it sleeps, has no DOM, and limited APIs — but for our use case the constraints are workable. The directory handle is loaded on demand from IndexedDB, screenshots are captured through the action API, and the popup window holds the user gesture needed for the File System Access API when a re-grant is required.
 
-## Threading and lifecycle
+## Why a folder is the integration
 
-```
-┌─────────────────────┐       ┌─────────────────────┐       ┌─────────────────────┐
-│ content script      │       │ background SW       │       │ MCP server          │
-│ (one per tab)       │       │ (one global)        │       │ (one global)        │
-├─────────────────────┤       ├─────────────────────┤       ├─────────────────────┤
-│ overlay + picker    │◀────▶ │ queue + WS client   │◀────▶ │ WS server + MCP     │
-│ capture + screenshot│       │ persistence         │       │ in-memory queue     │
-└─────────────────────┘       └─────────────────────┘       └─────────────────────┘
-```
-
-The content script is the only place that holds DOM references. The background service worker is the only place that holds the WebSocket. The server is the only place that exposes MCP tools. This separation keeps each surface small and testable.
-
-## Protocol
-
-See [protocol.md](protocol.md) for the wire format.
+Because every coding agent already reads files. Claude Code, Cursor, Aider, Continue, custom workflows — they all walk a working directory. By writing annotations to disk in a stable schema, DOMPin sidesteps the need for a custom protocol or a long-running daemon. Agents simply read `*.md` and `*.json` files like they would any other piece of context.

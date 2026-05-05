@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DOMPin",
   "version": "0.1.0",
-  "description": "Pin elements on any web page and send them to your AI coding agent.",
+  "description": "Pin elements on any web page and save them to a folder ready for your AI coding agent.",
   "permissions": ["activeTab", "scripting", "storage", "tabs", "unlimitedStorage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "icons": {
@@ -12,7 +12,7 @@
     "128": "public/icons/icon-128.png"
   },
   "action": {
-    "default_title": "DOMPin — click to toggle picker, right-click for queue",
+    "default_title": "DOMPin — click to toggle picker, right-click for the panel",
     "default_icon": {
       "16": "public/icons/icon-16.png",
       "32": "public/icons/icon-32.png",
@@ -35,10 +35,6 @@
   "options_page": "src/options/options.html",
   "commands": {
     "toggle-picker": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+Period",
-        "mac": "Command+Shift+Period"
-      },
       "description": "Toggle the DOMPin element picker"
     }
   }
