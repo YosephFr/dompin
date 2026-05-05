@@ -3,7 +3,15 @@
   "name": "DOMPin",
   "version": "0.1.0",
   "description": "Pin elements on any web page and save them to a folder ready for your AI coding agent.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "unlimitedStorage", "contextMenus"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "unlimitedStorage",
+    "contextMenus",
+    "sidePanel"
+  ],
   "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "public/icons/icon-16.png",
@@ -12,13 +20,16 @@
     "128": "public/icons/icon-128.png"
   },
   "action": {
-    "default_title": "DOMPin — click to toggle picker, right-click for the panel",
+    "default_title": "DOMPin",
     "default_icon": {
       "16": "public/icons/icon-16.png",
       "32": "public/icons/icon-32.png",
       "48": "public/icons/icon-48.png",
       "128": "public/icons/icon-128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
   },
   "background": {
     "service_worker": "src/background/index.ts",
@@ -33,9 +44,19 @@
     }
   ],
   "options_page": "src/options/options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["examples/demo-app/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "toggle-picker": {
-      "description": "Toggle the DOMPin element picker"
+      "description": "Toggle the DOMPin element picker",
+      "suggested_key": {
+        "default": "Ctrl+Shift+Period",
+        "mac": "Command+Shift+Period"
+      }
     }
   }
 }

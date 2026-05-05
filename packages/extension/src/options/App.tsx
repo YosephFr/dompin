@@ -12,16 +12,6 @@ type FlagKey = keyof Settings['flags'];
 
 const FLAGS: { key: FlagKey; label: string; description: string }[] = [
   {
-    key: 'captureViewportScreenshot',
-    label: 'Capture viewport screenshot per pin',
-    description: 'Saves the visible page area as a PNG alongside each annotation.',
-  },
-  {
-    key: 'captureZonedScreenshot',
-    label: 'Capture zoomed element screenshot per pin',
-    description: 'Saves a tighter PNG centered on the picked element with surrounding context.',
-  },
-  {
     key: 'captureNetworkFailures',
     label: 'Include recent network failures',
     description: 'Records failed network requests from the page in each annotation file.',
@@ -270,8 +260,8 @@ export function App(): JSX.Element {
             Vault folder: <code>{savedFolderName ?? 'selected folder'}</code>
           </p>
           <p className="section-hint">
-            Click the DOMPin icon on any page to start pinning. Right-click the icon to open the
-            session panel.
+            Click the DOMPin icon on any page to open the side panel and start pinning. You can also
+            right-click any element on a page and pick "Annotate element with DOMPin".
           </p>
           <div className="wizard-actions">
             <button type="button" className="btn btn-primary" onClick={() => setStep('settings')}>

@@ -4,6 +4,7 @@
   --muted: #5b6068;
   --border: #e3e5e9;
   --surface: #f7f8fa;
+  --surface-2: #eceef2;
   --accent: #0a84ff;
   --accent-pressed: #006fdc;
   --accent-soft: rgba(10, 132, 255, 0.12);
@@ -22,6 +23,7 @@
     --muted: #9ca0a8;
     --border: #2a2d33;
     --surface: #1c1f24;
+    --surface-2: #23262c;
     --accent: #4aa6ff;
     --accent-pressed: #3690ec;
     --accent-soft: rgba(74, 166, 255, 0.16);
@@ -45,26 +47,20 @@ body {
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.45;
-}
-
-body {
-  width: 380px;
-  min-height: 320px;
-  max-height: 600px;
-  overflow: hidden;
+  height: 100%;
 }
 
 #root {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
 }
 
-.popup-shell {
+.shell {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  min-height: 320px;
+  height: 100%;
+  min-width: 320px;
 }
 
 .loading {
@@ -73,12 +69,13 @@ body {
   color: var(--muted);
 }
 
-.popup-header {
+.head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .brand {
@@ -99,6 +96,12 @@ body {
   font-weight: 600;
   letter-spacing: -0.01em;
   font-size: 14px;
+}
+
+.head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .icon-btn {
@@ -123,6 +126,12 @@ body {
   color: var(--fg);
 }
 
+.body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
 .banner {
   margin: 12px 16px 0;
   padding: 8px 10px;
@@ -144,7 +153,6 @@ body {
   background: color-mix(in srgb, var(--ok) 12%, transparent);
   color: var(--ok);
 }
-
 .banner-ok .dot {
   background: var(--ok);
 }
@@ -153,7 +161,6 @@ body {
   background: color-mix(in srgb, var(--warn) 14%, transparent);
   color: var(--warn);
 }
-
 .banner-pending .dot {
   background: var(--warn);
   animation: dp-pulse 1.2s ease-in-out infinite;
@@ -163,7 +170,6 @@ body {
   background: color-mix(in srgb, var(--err) 12%, transparent);
   color: var(--err);
 }
-
 .banner-error .dot {
   background: var(--err);
 }
@@ -201,7 +207,6 @@ body {
 .banner-action:hover {
   background: rgba(0, 0, 0, 0.04);
 }
-
 @media (prefers-color-scheme: dark) {
   .banner-action:hover {
     background: rgba(255, 255, 255, 0.06);
@@ -305,6 +310,125 @@ body {
   color: var(--border);
 }
 
+.picker-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.picker-state.is-on {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.picker-state.is-on .picker-dot {
+  background: var(--ok);
+  animation: dp-pulse 1.5s ease-in-out infinite;
+}
+
+.picker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pin-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.pin-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pin-ord {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.pin-comment {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pin-comment.muted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.pin-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.icon-btn-sm {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+
+.icon-btn-sm:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.icon-btn-sm.is-danger:hover {
+  color: var(--err);
+}
+
+.pin-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.pin-edit textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
 .recent-list {
   list-style: none;
   margin: 0;
@@ -347,7 +471,8 @@ body {
   gap: 8px;
 }
 
-.inline-input {
+.inline-input,
+.inline-textarea {
   appearance: none;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -357,18 +482,20 @@ body {
   font-family: inherit;
   font-size: 13px;
   outline: none;
+  width: 100%;
   transition:
     border-color 120ms,
     box-shadow 120ms;
 }
 
-.inline-input:focus {
+.inline-input:focus,
+.inline-textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.popup-footer {
-  margin-top: auto;
+.foot {
+  flex: 0 0 auto;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
   display: flex;
@@ -393,7 +520,7 @@ body {
   text-decoration: underline;
 }
 
-.footer-meta {
+.foot-meta {
   font-size: 11px;
   color: var(--muted);
   font-family: var(--font-mono);
@@ -458,4 +585,58 @@ body {
 .btn-ghost:not(:disabled):hover {
   color: var(--fg);
   background: var(--bg);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--err);
+  border: 1px solid color-mix(in srgb, var(--err) 35%, var(--border));
+}
+
+.btn-danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--err) 10%, transparent);
+}
+
+.kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wizard-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.wizard-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tip {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0;
 }
