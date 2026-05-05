@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- BREAKING: removed local MCP server and WebSocket bridge. DOMPin now writes annotations directly to a folder on your machine via the File System Access API. Any AI agent that can read files can consume them.
+- Annotations are organized as `<root>/<domain>/<session>/NN.{md,png,viewport.png,json}` with a per-session `README.md` index regenerated on every write.
+- Sessions are scoped per browser tab; each tab starts a session automatically and a new one can be created from the popup.
+- The extension icon left-click toggles the picker; right-click opens the session panel.
+- Default keyboard shortcut for toggling the picker has been removed; users can assign one manually from `chrome://extensions/shortcuts`.
+
+### Removed
+
+- `@dompin/server` package (MCP stdio + WebSocket bridge).
+- `@dompin/shared` package; protocol types are now local to the extension.
+- WebSocket connection settings from the options page.
+
 ## [0.1.0] — 2026-05-05
 
 Initial release.

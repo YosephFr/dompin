@@ -2,11 +2,7 @@ const ILLEGAL = /[\\/:*?"<>|\x00-\x1f]/g;
 const TRIM = /^[\s.]+|[\s.]+$/g;
 
 export function sanitizeSegment(input: string, fallback: string): string {
-  const cleaned = input
-    .replace(ILLEGAL, '_')
-    .replace(/\s+/g, ' ')
-    .replace(TRIM, '')
-    .slice(0, 80);
+  const cleaned = input.replace(ILLEGAL, '_').replace(/\s+/g, ' ').replace(TRIM, '').slice(0, 80);
   return cleaned || fallback;
 }
 
