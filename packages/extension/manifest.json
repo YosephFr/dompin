@@ -29,11 +29,5 @@
       },
       "description": "Toggle the DOMPin element picker"
     }
-  },
-  "web_accessible_resources": [
-    {
-      "resources": ["src/content/inject.js"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  }
 }
