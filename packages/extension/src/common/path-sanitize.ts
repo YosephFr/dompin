@@ -39,9 +39,14 @@ export function defaultSessionName(rawUrl: string, date: Date = new Date()): str
   return sanitizeSegment(`${label}_${hhmm}`, `session_${hhmm}`);
 }
 
-export function buildSessionFolder(name: string, date: Date = new Date()): string {
+export function buildSessionFolder(
+  name: string,
+  shortId?: string,
+  date: Date = new Date(),
+): string {
   const slug = sanitizeSegment(name, 'session');
-  return `${timestampSlug(date)}__${slug}`;
+  const suffix = shortId ? `_${shortId}` : '';
+  return `${timestampSlug(date)}__${slug}${suffix}`;
 }
 
 export function annotationFileBase(ordinal: number): string {

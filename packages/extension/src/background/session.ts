@@ -122,9 +122,9 @@ async function createSession(
   const safeName = sanitizeSegment(sessionName, 'session');
   const domain = readDomain(pageUrl);
   const domainFolder = domainFolderFromUrl(pageUrl);
-  const folder = buildSessionFolder(safeName);
   const now = Date.now();
   const id = newId();
+  const folder = buildSessionFolder(safeName, id.replace(/-/g, '').slice(0, 4));
   const record: SessionRecord = {
     id,
     domain,
