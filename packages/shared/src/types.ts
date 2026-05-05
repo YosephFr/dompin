@@ -1,0 +1,121 @@
+export interface AnnotationPayload {
+  id: string;
+  createdAt: number;
+  page: PageContext;
+  element: ElementContext | null;
+  region: RegionContext | null;
+  comment: string;
+  voiceTranscript?: string;
+  screenshots: ScreenshotSet;
+  console: ConsoleEntry[];
+  network?: NetworkEntry[];
+}
+
+export interface PageContext {
+  url: string;
+  title: string;
+  userAgent: string;
+  viewport: ViewportInfo;
+  scroll: ScrollInfo;
+  colorScheme: 'light' | 'dark';
+  documentReadyState: DocumentReadyState;
+}
+
+export interface ViewportInfo {
+  width: number;
+  height: number;
+  devicePixelRatio: number;
+}
+
+export interface ScrollInfo {
+  x: number;
+  y: number;
+}
+
+export interface ElementContext {
+  selector: string;
+  xpath: string;
+  tag: string;
+  id: string | null;
+  classes: string[];
+  role: string | null;
+  ariaLabel: string | null;
+  textPreview: string | null;
+  outerHTMLPreview: string;
+  boundingRect: RectInfo;
+  computedStyles: ComputedStyleSubset;
+  react: ReactInfo | null;
+  scrollAncestorSelector: string | null;
+}
+
+export interface RegionContext {
+  rect: RectInfo;
+}
+
+export interface RectInfo {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ComputedStyleSubset {
+  layout: Record<string, string>;
+  typography: Record<string, string>;
+  box: Record<string, string>;
+  visual: Record<string, string>;
+}
+
+export interface ReactInfo {
+  componentName: string | null;
+  ownerChain: string[];
+  source: ReactSource | null;
+  props: Record<string, unknown> | null;
+}
+
+export interface ReactSource {
+  fileName: string;
+  lineNumber: number;
+  columnNumber: number;
+}
+
+export interface ScreenshotSet {
+  viewport: string;
+  zoned: string | null;
+}
+
+export interface ConsoleEntry {
+  level: ConsoleLevel;
+  timestamp: number;
+  message: string;
+  stack?: string;
+}
+
+export type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+
+export interface NetworkEntry {
+  url: string;
+  method: string;
+  status: number;
+  durationMs: number;
+  timestamp: number;
+}
+
+export interface ServerStatus {
+  protocolVersion: string;
+  serverVersion: string;
+  uptimeMs: number;
+  pendingCount: number;
+  extensionConnected: boolean;
+}
+
+export interface AnnotationSummary {
+  id: string;
+  createdAt: number;
+  pageUrl: string;
+  pageTitle: string;
+  selector: string | null;
+  commentPreview: string;
+}
+
+export type AnnotationId = string;

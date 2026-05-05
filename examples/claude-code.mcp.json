@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dompin": {
+      "command": "npx",
+      "args": ["-y", "@dompin/server"]
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@dompin/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for picking and annotating page elements; communicates with @dompin/server over a local WebSocket.",
+  "license": "MIT",
+  "author": "Yoseph Franco <yosephfr@icloud.com>",
+  "homepage": "https://github.com/YosephFr/dompin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YosephFr/dompin.git",
+    "directory": "packages/extension"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .vite"
+  },
+  "dependencies": {
+    "@dompin/shared": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@types/chrome": "^0.0.270",
+    "@types/node": "^22.7.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "DOMPin",
+  "version": "0.1.0",
+  "description": "Pin elements on any web page and send them to your AI coding agent.",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "DOMPin"
+  },
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "src/options/options.html",
+  "commands": {
+    "toggle-picker": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Period",
+        "mac": "Command+Shift+Period"
+      },
+      "description": "Toggle the DOMPin element picker"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/content/inject.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
