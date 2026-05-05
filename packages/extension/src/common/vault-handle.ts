@@ -1,18 +1,41 @@
+declare global {
+  interface FileSystemHandlePermissionDescriptor {
+    mode?: 'read' | 'readwrite';
+  }
+
+  interface FileSystemHandle {
+    queryPermission(
+      descriptor?: FileSystemHandlePermissionDescriptor,
+    ): Promise<'granted' | 'denied' | 'prompt'>;
+    requestPermission(
+      descriptor?: FileSystemHandlePermissionDescriptor,
+    ): Promise<'granted' | 'denied' | 'prompt'>;
+  }
+
+  interface ShowDirectoryPickerOptions {
+    id?: string;
+    mode?: 'read' | 'readwrite';
+    startIn?:
+      | FileSystemHandle
+      | 'desktop'
+      | 'documents'
+      | 'downloads'
+      | 'music'
+      | 'pictures'
+      | 'videos';
+  }
+
+  interface Window {
+    showDirectoryPicker(options?: ShowDirectoryPickerOptions): Promise<FileSystemDirectoryHandle>;
+  }
+}
+
 const DB_NAME = 'dompin';
 const DB_VERSION = 1;
 const STORE = 'kv';
 const HANDLE_KEY = 'vaultRoot';
 
 export type VaultPermissionState = 'granted' | 'prompt' | 'denied' | 'none';
-
-interface PermissionDescriptor {
-  mode?: 'read' | 'readwrite';
-}
-
-interface PermissibleHandle extends FileSystemDirectoryHandle {
-  queryPermission?(desc?: PermissionDescriptor): Promise<'granted' | 'prompt' | 'denied'>;
-  requestPermission?(desc?: PermissionDescriptor): Promise<'granted' | 'prompt' | 'denied'>;
-}
 
 async function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -62,9 +85,8 @@ export async function clearRootHandle(): Promise<void> {
 }
 
 export async function queryRootPermission(): Promise<VaultPermissionState> {
-  const handle = (await loadRootHandle()) as PermissibleHandle | null;
+  const handle = await loadRootHandle();
   if (!handle) return 'none';
-  if (typeof handle.queryPermission !== 'function') return 'granted';
   try {
     return await handle.queryPermission({ mode: 'readwrite' });
   } catch {
@@ -73,8 +95,8 @@ export async function queryRootPermission(): Promise<VaultPermissionState> {
 }
 
 export async function requestRootPermission(): Promise<'granted' | 'denied'> {
-  const handle = (await loadRootHandle()) as PermissibleHandle | null;
-  if (!handle || typeof handle.requestPermission !== 'function') return 'denied';
+  const handle = await loadRootHandle();
+  if (!handle) return 'denied';
   try {
     const result = await handle.requestPermission({ mode: 'readwrite' });
     return result === 'granted' ? 'granted' : 'denied';

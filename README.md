@@ -1,87 +1,71 @@
 # DOMPin
 
-> Pin elements on any web page and send them to your AI coding agent.
+> Pin elements on any web page. Annotations land in a folder on your machine, ready for any AI coding agent.
 
-DOMPin is a Chrome extension plus a local MCP server. You point at elements on any page in your real browser, drop a comment, and the full DOM context — unique selector, XPath, outerHTML, filtered computed styles, viewport + zoned screenshots, React Fiber info, console state — flows straight into Claude Code (or any MCP-compatible coding agent).
+DOMPin is a Chrome extension that lets you click any element on any web page, drop a comment, and capture the full DOM context — selector, XPath, outerHTML preview, computed styles, viewport and zoomed screenshots, React Fiber info, console state — straight into a folder you choose. Hand the folder to Claude Code, Cursor, or any tool that reads local files. No server, no port to manage.
 
-It is the natural complement to a "show, don't tell" workflow: instead of describing the bug or the change in words, you click the element and the agent receives a complete, structured payload of what you mean.
+## How it works
 
-## Why
+1. Install the extension and open it once. Pick a folder where DOMPin will write annotations.
+2. On any web page, click the DOMPin icon to start pinning. Click an element, type a comment, press Enter.
+3. The extension writes a Markdown file plus a screenshot for every pin, organized by domain and session.
+4. Open the folder in your editor and let your AI agent work from it.
 
-Existing approaches fall short:
-
-- Browser-internal annotation tools live in a sandboxed browser, so you lose your real session, extensions, and dev muscle memory.
-- DevTools-based pickers are precise but skip the annotation and comment workflow.
-- Localhost-only annotators do not help when you need to point at your deployed app.
-
-DOMPin runs as an extension on your real Chrome, with your real session, on any URL, and pipes annotations through MCP — the same protocol your IDE agent already speaks.
-
-## Features
-
-- Element picker with hover overlay (DevTools-style highlight, selector tooltip, dimensions)
-- Drag-region mode for annotations that are not anchored to a single element
-- Multi-page batching: queue annotations across routes and pages of a single-page app
-- Bidirectional control: the agent can highlight or scroll to any element in your browser
-- Full payload per annotation: unique CSS selector, XPath, outerHTML preview, filtered computed styles, viewport and element-zoned screenshots, React Fiber introspection, console state
-- Voice memos via the Web Speech API (optional)
-- Persistence: queue survives page reloads and SPA navigation
-- Privacy first: runs entirely on localhost, no telemetry, configurable domain allowlist
-- MIT licensed
-
-## Architecture
+## File layout
 
 ```
-┌────────────────────────────────────────────────┐
-│ Your Chrome (real session, real cookies)       │
-│  ┌─────────────────────────────────────────┐   │
-│  │ DOMPin content script                   │   │
-│  │ • overlay + picker + comment popup      │   │
-│  │ • element capture + screenshot          │   │
-│  └────────────────┬────────────────────────┘   │
-│                   │ chrome.runtime              │
-│  ┌────────────────▼────────────────────────┐   │
-│  │ DOMPin background service worker        │   │
-│  │ • queue + persistence                   │   │
-│  │ • WS client                             │   │
-│  └────────────────┬────────────────────────┘   │
-└───────────────────┼────────────────────────────┘
-                    │ WebSocket on 127.0.0.1
-┌───────────────────▼────────────────────────────┐
-│ DOMPin MCP server (Node)                        │
-│ • WS server (extension link)                    │
-│ • MCP stdio transport (agent link)              │
-│ • in-memory pin queue                           │
-└───────────────────┬────────────────────────────┘
-                    │ MCP stdio
-┌───────────────────▼────────────────────────────┐
-│ Claude Code, Cursor, or any MCP client          │
-└────────────────────────────────────────────────┘
+<your-vault>/
+  example.com/
+    20260505-1432__landing_a1f2/
+      README.md
+      01.md
+      01.png
+      01.viewport.png
+      01.json
+      02.md
+      02.png
+      02.viewport.png
+      02.json
 ```
 
-## Quick start
+Each `NN.md` contains your comment, the picked element data, and links to the screenshots. `NN.json` carries the full structured payload for tools that prefer to parse rather than read prose. See [docs/file-schema.md](docs/file-schema.md) for the full specification.
 
-> Stable installer is in progress. Until v0.1.0 is published, see [docs/installation.md](docs/installation.md) for the dev workflow.
+## Sessions
+
+Each browser tab starts a session the first time you pin something on it. Right-click the DOMPin icon to open the session panel, where you can rename the active session, archive it, or start a new one in the same tab.
+
+## Privacy
+
+Everything stays on your machine. DOMPin asks for read-write access to one folder you pick — nothing else. No telemetry, no remote calls, no hidden network traffic. An allowlist controls which sites the picker is available on.
+
+## Install
 
 ```bash
+git clone https://github.com/YosephFr/dompin.git
+cd dompin
 pnpm install
 pnpm build
 ```
 
-Then load `packages/extension/dist` as an unpacked extension in Chrome (`chrome://extensions`, Developer mode), and point your MCP-compatible agent at the local server (see [docs/installation.md](docs/installation.md)).
+Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions` (Developer mode → Load unpacked) and open the extension's options page to pick your vault folder. Full instructions in [docs/installation.md](docs/installation.md).
 
-## Repo layout
+## Why
 
-| Path                 | Purpose                                                 |
-| -------------------- | ------------------------------------------------------- |
-| `packages/shared`    | Protocol types shared by extension and server           |
-| `packages/extension` | Chrome extension (Manifest V3)                          |
-| `packages/server`    | Local MCP server with WebSocket bridge to the extension |
-| `docs/`              | Architecture, installation, protocol reference          |
-| `examples/`          | Sample MCP client configuration snippets                |
+- Browser-internal annotation tools live in a sandboxed browser, so you lose your real session, extensions, and dev muscle memory. DOMPin runs on your real Chrome.
+- DevTools-based pickers are precise but skip the comment workflow.
+- Localhost-only annotators do not help when you need to point at your deployed app. DOMPin works on any URL.
+- Server-based bridges add a process, a port, and a daemon. DOMPin is just files on disk.
+
+## Documentation
+
+- [Installation](docs/installation.md)
+- [Architecture](docs/architecture.md)
+- [File schema](docs/file-schema.md)
+- [Development](docs/development.md)
 
 ## Disclaimer
 
-DOMPin is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Anthropic, the maker of Claude.
+DOMPin is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Anthropic, OpenAI, or any other AI tooling vendor. The folder format is the entire integration — any tool that reads local files can use it.
 
 ## License
 
