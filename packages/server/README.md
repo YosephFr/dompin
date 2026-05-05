@@ -60,15 +60,15 @@ CLI flags take precedence over env vars. All logging is written to stderr; stdou
 
 ## MCP tools
 
-| Tool                       | Purpose                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `list_pinned_annotations`  | Compact summary list of every queued annotation                                                        |
-| `get_annotation`           | Full payload for one annotation (DOM, styles, screenshots as image content blocks, console, network)   |
-| `consume_annotation`       | Remove an annotation from the queue once acted on                                                      |
-| `clear_pinned`             | Remove every annotation in the queue                                                                   |
-| `highlight_element`        | Ask the extension to flash a highlight overlay around a selector in the user browser                   |
-| `scroll_to_element`        | Ask the extension to scroll a selector into view in the user browser                                   |
-| `server_status`            | Server runtime info: protocol/server versions, uptime, pending count, whether the extension is online  |
+| Tool                      | Purpose                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `list_pinned_annotations` | Compact summary list of every queued annotation                                                       |
+| `get_annotation`          | Full payload for one annotation (DOM, styles, screenshots as image content blocks, console, network)  |
+| `consume_annotation`      | Remove an annotation from the queue once acted on                                                     |
+| `clear_pinned`            | Remove every annotation in the queue                                                                  |
+| `highlight_element`       | Ask the extension to flash a highlight overlay around a selector in the user browser                  |
+| `scroll_to_element`       | Ask the extension to scroll a selector into view in the user browser                                  |
+| `server_status`           | Server runtime info: protocol/server versions, uptime, pending count, whether the extension is online |
 
 Each tool accepts a zod-validated input schema and returns a structured payload alongside human-readable text content.
 

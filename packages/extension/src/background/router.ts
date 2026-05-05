@@ -1,10 +1,6 @@
 import type { ServerMessage } from '@dompin/shared';
 import { PROTOCOL_VERSION, buildWsUrl } from '@dompin/shared';
-import type {
-  ExtensionState,
-  PinForPage,
-  RequestMessage,
-} from '../common/messaging.js';
+import type { ExtensionState, PinForPage, RequestMessage } from '../common/messaging.js';
 import { createLogger } from '../common/logger.js';
 import { saveSettings, loadSettings } from '../common/storage.js';
 import { mergeSettings, type Settings } from '../common/settings.js';
@@ -140,8 +136,7 @@ async function getState(ctx: RouterContext): Promise<{ ok: true; state: Extensio
 async function testConnection(
   partial: Settings,
 ): Promise<
-  | { ok: true; serverVersion: string; protocolVersion: string }
-  | { ok: false; error: string }
+  { ok: true; serverVersion: string; protocolVersion: string } | { ok: false; error: string }
 > {
   const settings = mergeSettings(partial);
   const url = buildWsUrl(settings.ws.host, settings.ws.port, settings.ws.path);

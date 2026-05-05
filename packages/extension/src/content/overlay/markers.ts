@@ -110,7 +110,9 @@ export class MarkerManager {
     }
   }
 
-  private resolveRect(p: PinForPage): { x: number; y: number; width: number; height: number } | null {
+  private resolveRect(
+    p: PinForPage,
+  ): { x: number; y: number; width: number; height: number } | null {
     if (p.region) return p.region;
     if (!p.selector) return null;
     try {

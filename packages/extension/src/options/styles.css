@@ -12,8 +12,7 @@
   --font-ui:
     'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable Text', 'Segoe UI Variable Display',
     -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  --font-mono:
-    'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -167,7 +166,9 @@ body {
   font-family: var(--font-mono);
   font-size: 13px;
   outline: none;
-  transition: border-color 120ms, box-shadow 120ms;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms;
 }
 
 .field input:focus {
@@ -196,7 +197,9 @@ body {
   outline: none;
   resize: vertical;
   min-height: 96px;
-  transition: border-color 120ms, box-shadow 120ms;
+  transition:
+    border-color 120ms,
+    box-shadow 120ms;
 }
 
 .textarea:focus {
@@ -294,7 +297,10 @@ body {
   font-weight: 500;
   padding: 9px 16px;
   border-radius: 8px;
-  transition: background 120ms, color 120ms, transform 80ms;
+  transition:
+    background 120ms,
+    color 120ms,
+    transform 80ms;
   letter-spacing: 0.01em;
 }
 

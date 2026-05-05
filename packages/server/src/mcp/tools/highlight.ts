@@ -5,12 +5,16 @@ const InputSchema = {
   selector: z
     .string()
     .min(1)
-    .describe('CSS selector to highlight in the user browser. Must match an element in the active page.'),
+    .describe(
+      'CSS selector to highlight in the user browser. Must match an element in the active page.',
+    ),
   url: z
     .string()
     .url()
     .optional()
-    .describe('Optional: URL the selector belongs to. The extension may use it to disambiguate across tabs.'),
+    .describe(
+      'Optional: URL the selector belongs to. The extension may use it to disambiguate across tabs.',
+    ),
   durationMs: z
     .number()
     .int()

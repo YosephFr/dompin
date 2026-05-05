@@ -24,7 +24,9 @@ export class CommentPopup {
 
   open(opts: PopupOptions): void {
     if (!this.root) this.root = createRoot(this.mount);
-    this.root.render(<PopupView {...opts} onLifecycle={(action) => action === 'close' && this.close()} />);
+    this.root.render(
+      <PopupView {...opts} onLifecycle={(action) => action === 'close' && this.close()} />,
+    );
   }
 
   close(): void {
@@ -172,12 +174,7 @@ function PopupView(props: InternalProps): JSX.Element {
         <div className="dp-popup-meta" title={selectorPreview}>
           {selectorPreview}
         </div>
-        <button
-          type="button"
-          className="dp-popup-close"
-          onClick={handleCancel}
-          aria-label="Cancel"
-        >
+        <button type="button" className="dp-popup-close" onClick={handleCancel} aria-label="Cancel">
           <CloseIcon />
         </button>
       </div>
@@ -226,10 +223,7 @@ function PopupView(props: InternalProps): JSX.Element {
   );
 }
 
-function positionPopup(
-  anchor: RectInfo,
-  size: { w: number; h: number },
-): { x: number; y: number } {
+function positionPopup(anchor: RectInfo, size: { w: number; h: number }): { x: number; y: number } {
   const margin = 10;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -301,12 +295,7 @@ function stopRecognition(r: unknown): void {
 function CloseIcon(): JSX.Element {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path
-        d="M3 3l8 8M11 3l-8 8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+      <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -314,15 +303,7 @@ function CloseIcon(): JSX.Element {
 function MicIcon(): JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect
-        x="6"
-        y="2"
-        width="4"
-        height="7"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-      />
+      <rect x="6" y="2" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M3.5 7.5C3.5 9.99 5.51 12 8 12s4.5-2.01 4.5-4.5M8 12v2M5.5 14h5"
         stroke="currentColor"

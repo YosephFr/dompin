@@ -107,9 +107,12 @@ export function App(): JSX.Element {
         </button>
       </header>
 
-      <ConnectionBanner status={state.connection} onReconnect={async () => {
-        await sendRequest({ kind: 'reconnect' });
-      }} />
+      <ConnectionBanner
+        status={state.connection}
+        onReconnect={async () => {
+          await sendRequest({ kind: 'reconnect' });
+        }}
+      />
 
       <section className="queue">
         <div className="queue-summary">

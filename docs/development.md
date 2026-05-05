@@ -81,7 +81,7 @@ pnpm format:check  # CI
 
 - TypeScript strict, no implicit `any`.
 - Many small files (200-400 lines typical, 800 max).
-- Comments only when the *why* is non-obvious; never paraphrase the code.
+- Comments only when the _why_ is non-obvious; never paraphrase the code.
 - React only in popup/options. Content script avoids React unless we mount inside a Shadow DOM root for isolation.
 - Logging in the server goes to stderr (`process.stderr.write` or `console.error`). `stdout` is reserved for MCP transport.
 

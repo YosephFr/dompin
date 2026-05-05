@@ -38,7 +38,7 @@ The server listens on stdio for MCP clients and on `ws://127.0.0.1:8930` for the
 
 - TypeScript strict, no implicit `any`.
 - Prefer many small files (200-400 lines typical, 800 max).
-- No comments unless they explain a non-obvious *why*.
+- No comments unless they explain a non-obvious _why_.
 - Run `pnpm format` before committing.
 
 ## Pull requests

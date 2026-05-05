@@ -225,11 +225,7 @@ class ContentApp {
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) return;
-    showPulse(
-      this.overlay.layer,
-      { x: r.x, y: r.y, width: r.width, height: r.height },
-      durationMs,
-    );
+    showPulse(this.overlay.layer, { x: r.x, y: r.y, width: r.width, height: r.height }, durationMs);
     el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   }
 

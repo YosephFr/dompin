@@ -14,8 +14,7 @@
   --font-ui:
     'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable Text', 'Segoe UI Variable Display',
     -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  --font-mono:
-    'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -115,7 +114,9 @@ body {
   justify-content: center;
   color: var(--muted);
   cursor: pointer;
-  transition: background 120ms, color 120ms;
+  transition:
+    background 120ms,
+    color 120ms;
 }
 
 .icon-btn:hover {

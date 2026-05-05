@@ -77,7 +77,9 @@ export class AnnotationStore {
     return this.order.map((id) => {
       const payload = this.byId.get(id);
       if (!payload) {
-        throw new Error(`AnnotationStore inconsistency: ${id} present in order but missing in byId`);
+        throw new Error(
+          `AnnotationStore inconsistency: ${id} present in order but missing in byId`,
+        );
       }
       return toSummary(payload);
     });

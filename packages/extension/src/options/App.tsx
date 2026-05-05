@@ -48,11 +48,7 @@ export function App(): JSX.Element {
   const update = (patch: Partial<Settings> | ((s: Settings) => Settings)) => {
     setSavedTick(false);
     setDraft((prev) =>
-      prev == null
-        ? prev
-        : typeof patch === 'function'
-          ? patch(prev)
-          : { ...prev, ...patch },
+      prev == null ? prev : typeof patch === 'function' ? patch(prev) : { ...prev, ...patch },
     );
   };
 
@@ -106,9 +102,7 @@ export function App(): JSX.Element {
             <input
               type="text"
               value={draft.ws.host}
-              onChange={(e) =>
-                update((s) => ({ ...s, ws: { ...s.ws, host: e.target.value } }))
-              }
+              onChange={(e) => update((s) => ({ ...s, ws: { ...s.ws, host: e.target.value } }))}
               spellCheck={false}
               autoComplete="off"
             />
@@ -128,9 +122,7 @@ export function App(): JSX.Element {
             <input
               type="text"
               value={draft.ws.path}
-              onChange={(e) =>
-                update((s) => ({ ...s, ws: { ...s.ws, path: e.target.value } }))
-              }
+              onChange={(e) => update((s) => ({ ...s, ws: { ...s.ws, path: e.target.value } }))}
               spellCheck={false}
               autoComplete="off"
             />
@@ -167,7 +159,10 @@ export function App(): JSX.Element {
           onChange={(e) =>
             update((s) => ({
               ...s,
-              allowlist: e.target.value.split(/\n+/).map((l) => l.trim()).filter(Boolean),
+              allowlist: e.target.value
+                .split(/\n+/)
+                .map((l) => l.trim())
+                .filter(Boolean),
             }))
           }
         />
@@ -186,17 +181,13 @@ export function App(): JSX.Element {
           label="Voice memos"
           description="Use the browser's speech recognition to dictate the comment."
           checked={draft.flags.enableWebSpeech}
-          onChange={(v) =>
-            update((s) => ({ ...s, flags: { ...s.flags, enableWebSpeech: v } }))
-          }
+          onChange={(v) => update((s) => ({ ...s, flags: { ...s.flags, enableWebSpeech: v } }))}
         />
         <Toggle
           label="React Fiber introspection"
           description="Read component name, owner chain, and props from React internals when present."
           checked={draft.flags.enableReactFiber}
-          onChange={(v) =>
-            update((s) => ({ ...s, flags: { ...s.flags, enableReactFiber: v } }))
-          }
+          onChange={(v) => update((s) => ({ ...s, flags: { ...s.flags, enableReactFiber: v } }))}
         />
       </Section>
 
@@ -211,12 +202,7 @@ export function App(): JSX.Element {
         </button>
         <div className="footer-spacer" />
         {savedTick ? <span className="status-ok">Saved</span> : null}
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleSave}
-          disabled={!canSave}
-        >
+        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={!canSave}>
           Save changes
         </button>
       </footer>
@@ -224,13 +210,7 @@ export function App(): JSX.Element {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}): JSX.Element {
+function Section({ title, children }: { title: string; children: React.ReactNode }): JSX.Element {
   return (
     <section className="section">
       <h2>{title}</h2>

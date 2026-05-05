@@ -17,7 +17,7 @@ export function reactInfoOf(el: Element): ReactInfo | null {
     componentName: fiber ? componentNameOf(fiber) : null,
     ownerChain: fiber ? ownerChainOf(fiber, 5) : [],
     source: fiber ? sourceOf(fiber) : null,
-    props: props != null ? sanitize(props, 2) as Record<string, unknown> : null,
+    props: props != null ? (sanitize(props, 2) as Record<string, unknown>) : null,
   };
 }
 
@@ -54,7 +54,12 @@ function componentNameOf(fiber: FiberLike): string | null {
       type?: { displayName?: string; name?: string };
     };
     return (
-      obj.displayName ?? obj.render?.displayName ?? obj.render?.name ?? obj.type?.displayName ?? obj.type?.name ?? null
+      obj.displayName ??
+      obj.render?.displayName ??
+      obj.render?.name ??
+      obj.type?.displayName ??
+      obj.type?.name ??
+      null
     );
   }
   return null;

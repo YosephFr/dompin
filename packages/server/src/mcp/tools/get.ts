@@ -29,7 +29,9 @@ const buildSummaryText = (p: AnnotationPayload): string => {
   lines.push(`Created: ${new Date(p.createdAt).toISOString()}`);
   lines.push(`Page: ${p.page.title}`);
   lines.push(`URL: ${p.page.url}`);
-  lines.push(`Viewport: ${p.page.viewport.width}x${p.page.viewport.height} @ dpr ${p.page.viewport.devicePixelRatio}`);
+  lines.push(
+    `Viewport: ${p.page.viewport.width}x${p.page.viewport.height} @ dpr ${p.page.viewport.devicePixelRatio}`,
+  );
   lines.push(`Color scheme: ${p.page.colorScheme}`);
   lines.push('');
   if (p.element) {
@@ -112,7 +114,11 @@ export const registerGetTool: ToolRegistrar = (mcp, { store }) => {
         return {
           isError: true,
           content: [{ type: 'text', text: `Annotation ${id} not found.` }],
-          structuredContent: { payload: null, hasViewportScreenshot: false, hasZonedScreenshot: false },
+          structuredContent: {
+            payload: null,
+            hasViewportScreenshot: false,
+            hasZonedScreenshot: false,
+          },
         };
       }
 
@@ -120,8 +126,7 @@ export const registerGetTool: ToolRegistrar = (mcp, { store }) => {
       const zoned = payload.screenshots.zoned ? decodeScreenshot(payload.screenshots.zoned) : null;
 
       const content: Array<
-        | { type: 'text'; text: string }
-        | { type: 'image'; data: string; mimeType: string }
+        { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
       > = [{ type: 'text', text: buildSummaryText(payload) }];
 
       if (viewport) {
@@ -130,7 +135,10 @@ export const registerGetTool: ToolRegistrar = (mcp, { store }) => {
       } else if (payload.screenshots.viewport) {
         content.push({
           type: 'text',
-          text: 'Viewport screenshot (raw, not decodable as image):\n' + payload.screenshots.viewport.slice(0, 256) + '…',
+          text:
+            'Viewport screenshot (raw, not decodable as image):\n' +
+            payload.screenshots.viewport.slice(0, 256) +
+            '…',
         });
       }
       if (zoned) {

@@ -71,13 +71,13 @@ Then load `packages/extension/dist` as an unpacked extension in Chrome (`chrome:
 
 ## Repo layout
 
-| Path                  | Purpose                                                       |
-| --------------------- | ------------------------------------------------------------- |
-| `packages/shared`     | Protocol types shared by extension and server                 |
-| `packages/extension`  | Chrome extension (Manifest V3)                                |
-| `packages/server`     | Local MCP server with WebSocket bridge to the extension       |
-| `docs/`               | Architecture, installation, protocol reference                |
-| `examples/`           | Sample MCP client configuration snippets                      |
+| Path                 | Purpose                                                 |
+| -------------------- | ------------------------------------------------------- |
+| `packages/shared`    | Protocol types shared by extension and server           |
+| `packages/extension` | Chrome extension (Manifest V3)                          |
+| `packages/server`    | Local MCP server with WebSocket bridge to the extension |
+| `docs/`              | Architecture, installation, protocol reference          |
+| `examples/`          | Sample MCP client configuration snippets                |
 
 ## Disclaimer
 

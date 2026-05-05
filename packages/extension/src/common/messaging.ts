@@ -61,10 +61,10 @@ export type TabCommand =
 
 export function sendRequest<T = unknown>(
   req: RequestMessage,
-): Promise<{ ok: true } & T | { ok: false; error: string }> {
+): Promise<({ ok: true } & T) | { ok: false; error: string }> {
   return new Promise((resolve) => {
     try {
-      chrome.runtime.sendMessage(req, (resp: { ok: true } & T | { ok: false; error: string }) => {
+      chrome.runtime.sendMessage(req, (resp: ({ ok: true } & T) | { ok: false; error: string }) => {
         const err = chrome.runtime.lastError;
         if (err) {
           resolve({ ok: false, error: err.message ?? 'runtime error' });
