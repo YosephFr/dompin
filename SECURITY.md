@@ -21,9 +21,23 @@ You should expect an initial response within a few days.
 
 ## Threat model summary
 
-DOMPin runs entirely on localhost. The extension communicates with the local MCP server over an unauthenticated WebSocket on `127.0.0.1`. This is by design for a developer tool, but it means:
+DOMPin is a Chrome extension that writes annotation files to a folder the user picks. There is no server, no socket, and no remote endpoint. The trust boundary is the extension itself plus the directory handle it holds.
 
-- Any local process can connect to the server while it is running.
-- Any web page you visit could attempt to connect to the local WebSocket port if the server is running and the extension is enabled.
+What the extension can reach:
 
-The server validates message shapes and origins. Future versions will offer per-domain allowlists in the extension and an opt-in token for the WebSocket handshake. Issues or proposals on tightening this surface are welcome.
+- The folder the user grants through the File System Access API. Nothing else on disk.
+- Any page the user visits that matches the configured allowlist (default: every site). The picker overlay only activates when the user toggles it.
+- The browser action and screenshot APIs that Manifest V3 exposes to the extension.
+
+What the extension cannot reach:
+
+- Any folder outside the granted directory handle.
+- Any network endpoint. The extension makes no outgoing requests.
+- Other extensions or browser profiles.
+
+Known caveats:
+
+- The directory handle persists across browser restarts. A different user on the same operating system account who can launch the same Chrome profile inherits access to the chosen vault folder. Do not store secrets there.
+- Annotation files include screenshots of what was on screen at capture time, plus a console buffer. Be mindful of capturing sensitive information into the vault.
+
+Issues or proposals on tightening this surface are welcome.

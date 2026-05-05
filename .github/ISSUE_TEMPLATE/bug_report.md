@@ -26,11 +26,10 @@ What actually happened.
 ## Environment
 
 - DOMPin extension version:
-- DOMPin server version:
 - Browser and version:
 - OS:
-- MCP client (Claude Code, Cursor, ...):
+- AI tooling that reads the vault (Claude Code, Cursor, ...):
 
 ## Logs
 
-Paste relevant console output, server logs, or stack traces.
+Paste relevant console output or stack traces.

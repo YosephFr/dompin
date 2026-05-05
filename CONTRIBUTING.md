@@ -24,15 +24,7 @@ pnpm typecheck
 pnpm --filter @dompin/extension dev
 ```
 
-Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions`.
-
-## Running the MCP server locally
-
-```bash
-pnpm --filter @dompin/server dev
-```
-
-The server listens on stdio for MCP clients and on `ws://127.0.0.1:8930` for the extension.
+Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions`. Open the extension's options page once to pick a vault folder before exercising the picker.
 
 ## Code style
 
@@ -50,4 +42,4 @@ The server listens on stdio for MCP clients and on `ws://127.0.0.1:8930` for the
 
 ## Reporting bugs
 
-Use the issue templates. Include browser version, extension version, server version, and a console log if relevant.
+Use the issue templates. Include browser version, extension version, OS, and a console log if relevant. If the bug involves the vault folder, mention the operating system and the folder location (no contents).
