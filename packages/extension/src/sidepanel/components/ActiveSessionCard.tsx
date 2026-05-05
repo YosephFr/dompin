@@ -5,11 +5,9 @@ import { relativeTime, type Busy } from '../utils.js';
 export function ActiveSessionCard({
   session,
   domain,
-  pickerOn,
   busy,
   renameDraft,
   newDraft,
-  onTogglePicker,
   onStartNew,
   onCommitNew,
   onCancelNew,
@@ -18,15 +16,13 @@ export function ActiveSessionCard({
   onCommitRename,
   onCancelRename,
   onRenameDraftChange,
-  onArchive,
+  onEndSession,
 }: {
   session: Session | null;
   domain: string | null;
-  pickerOn: boolean;
   busy: Busy;
   renameDraft: string | null;
   newDraft: string | null;
-  onTogglePicker: () => void;
   onStartNew: () => void;
   onCommitNew: (name: string | null) => void;
   onCancelNew: () => void;
@@ -35,16 +31,17 @@ export function ActiveSessionCard({
   onCommitRename: (e: FormEvent) => void;
   onCancelRename: () => void;
   onRenameDraftChange: (v: string) => void;
-  onArchive: () => void;
+  onEndSession: () => void;
 }): JSX.Element {
   return (
     <section className="card">
       <div className="card-header">
-        <span className="card-eyebrow">Active session</span>
-        <span className={`picker-state ${pickerOn ? 'is-on' : ''}`}>
-          <span className="picker-dot" aria-hidden="true" />
-          {pickerOn ? 'Picker on' : 'Picker off'}
-        </span>
+        <span className="card-eyebrow">Session</span>
+        {session ? (
+          <span className="session-meta">
+            {relativeTime(session.lastWriteAt ?? session.startedAt)}
+          </span>
+        ) : null}
       </div>
 
       {newDraft !== null ? (
@@ -67,21 +64,13 @@ export function ActiveSessionCard({
         <ActiveSessionInfo
           session={session}
           domain={domain}
-          pickerOn={pickerOn}
           busy={busy}
-          onTogglePicker={onTogglePicker}
           onStartNew={onStartNew}
           onStartRename={onStartRename}
-          onArchive={onArchive}
+          onEndSession={onEndSession}
         />
       ) : (
-        <EmptySessionInfo
-          domain={domain}
-          pickerOn={pickerOn}
-          busy={busy}
-          onTogglePicker={onTogglePicker}
-          onStartNew={onStartNew}
-        />
+        <EmptySessionInfo domain={domain} onStartNew={onStartNew} />
       )}
     </section>
   );
@@ -164,21 +153,17 @@ function RenameForm({
 function ActiveSessionInfo({
   session,
   domain,
-  pickerOn,
   busy,
-  onTogglePicker,
   onStartNew,
   onStartRename,
-  onArchive,
+  onEndSession,
 }: {
   session: Session;
   domain: string | null;
-  pickerOn: boolean;
   busy: Busy;
-  onTogglePicker: () => void;
   onStartNew: () => void;
   onStartRename: () => void;
-  onArchive: () => void;
+  onEndSession: () => void;
 }): JSX.Element {
   return (
     <>
@@ -189,24 +174,10 @@ function ActiveSessionInfo({
           ·
         </span>
         <span>
-          {session.annotationCount} annotation{session.annotationCount === 1 ? '' : 's'}
-        </span>
-        <span className="session-dot" aria-hidden="true">
-          ·
-        </span>
-        <span className="session-meta">
-          {relativeTime(session.lastWriteAt ?? session.startedAt)}
+          {session.annotationCount} pin{session.annotationCount === 1 ? '' : 's'}
         </span>
       </div>
       <div className="card-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onTogglePicker}
-          disabled={busy === 'toggle'}
-        >
-          {busy === 'toggle' ? 'Working…' : pickerOn ? 'Pause picker' : 'Resume picker'}
-        </button>
         <button type="button" className="btn btn-secondary" onClick={onStartNew}>
           New session
         </button>
@@ -216,11 +187,11 @@ function ActiveSessionInfo({
         <button
           type="button"
           className="btn btn-ghost"
-          onClick={onArchive}
+          onClick={onEndSession}
           disabled={busy === 'archive'}
-          title="Stop writing to this session"
+          title="Stop writing to this session. Files stay where they are."
         >
-          Archive
+          End session
         </button>
       </div>
     </>
@@ -229,15 +200,9 @@ function ActiveSessionInfo({
 
 function EmptySessionInfo({
   domain,
-  pickerOn,
-  busy,
-  onTogglePicker,
   onStartNew,
 }: {
   domain: string | null;
-  pickerOn: boolean;
-  busy: Busy;
-  onTogglePicker: () => void;
   onStartNew: () => void;
 }): JSX.Element {
   return (
@@ -245,18 +210,10 @@ function EmptySessionInfo({
       <div className="session-name session-name-empty">No session yet</div>
       <p className="card-text">
         {domain
-          ? `Pick an element on ${domain} to start a session here.`
+          ? `Pin an element on ${domain} to start a session here.`
           : 'Open a regular tab to start a session.'}
       </p>
       <div className="card-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={onTogglePicker}
-          disabled={busy === 'toggle'}
-        >
-          {busy === 'toggle' ? 'Working…' : pickerOn ? 'Pause picker' : 'Start picker'}
-        </button>
         <button type="button" className="btn btn-secondary" onClick={onStartNew}>
           Name session…
         </button>

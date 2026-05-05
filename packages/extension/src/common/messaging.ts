@@ -33,6 +33,7 @@ export type RequestMessage =
   | { kind: 'capture-element'; rect: RectInfo; dpr: number; padding?: number }
   | { kind: 'pins:for-tab'; tabId?: number }
   | { kind: 'toggle-picker' }
+  | { kind: 'picker:state-broadcast'; active: boolean }
   | { kind: 'settings:save'; settings: Settings };
 
 export type Resp<T extends object = Record<string, never>> =
@@ -57,6 +58,7 @@ export type TabCommand =
   | { kind: 'picker:toggle' }
   | { kind: 'picker:open' }
   | { kind: 'picker:close' }
+  | { kind: 'picker:query-state' }
   | { kind: 'annotate:context' }
   | { kind: 'pins:update' };
 

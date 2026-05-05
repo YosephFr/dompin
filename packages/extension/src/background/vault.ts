@@ -5,6 +5,7 @@ import { createLogger } from '../common/logger.js';
 const log = createLogger('vault');
 
 const SESSIONS_KEY = 'dompin:sessions:v1';
+const HEALTH_FILE = '.dompin-health';
 
 async function readCounters(): Promise<{ sessions: number; annotations: number }> {
   try {
@@ -21,6 +22,13 @@ async function readCounters(): Promise<{ sessions: number; annotations: number }
 
 let cachedHandle: FileSystemDirectoryHandle | null = null;
 let resolvedFromIdb = false;
+let cachedHealth: { ts: number; ok: boolean; reason: string | null } = {
+  ts: 0,
+  ok: true,
+  reason: null,
+};
+
+const HEALTH_TTL_MS = 30_000;
 
 async function resolveHandle(): Promise<FileSystemDirectoryHandle | null> {
   if (cachedHandle) return cachedHandle;
@@ -33,9 +41,10 @@ async function resolveHandle(): Promise<FileSystemDirectoryHandle | null> {
 export function invalidateHandleCache(): void {
   cachedHandle = null;
   resolvedFromIdb = false;
+  cachedHealth = { ts: 0, ok: true, reason: null };
 }
 
-export async function getStatus(): Promise<VaultStatus> {
+export async function getStatus(force = false): Promise<VaultStatus> {
   const handle = await resolveHandle();
   const counters = await readCounters();
   if (!handle) {
@@ -44,17 +53,33 @@ export async function getStatus(): Promise<VaultStatus> {
       rootName: null,
       hasPermission: false,
       needsReconnect: false,
+      unreachable: false,
+      unreachableReason: null,
       totalSessions: counters.sessions,
       totalAnnotations: counters.annotations,
     };
   }
   const perm = await queryRootPermission();
   const hasPermission = perm === 'granted';
+  const needsReconnect = !hasPermission;
+  let unreachable = false;
+  let unreachableReason: string | null = null;
+  if (hasPermission) {
+    const fresh = force || Date.now() - cachedHealth.ts > HEALTH_TTL_MS;
+    if (fresh) {
+      const h = await runHealthCheck(handle);
+      cachedHealth = { ts: Date.now(), ok: h.ok, reason: h.ok ? null : h.reason };
+    }
+    unreachable = !cachedHealth.ok;
+    unreachableReason = cachedHealth.reason;
+  }
   return {
     configured: true,
     rootName: handle.name,
     hasPermission,
-    needsReconnect: !hasPermission,
+    needsReconnect,
+    unreachable,
+    unreachableReason,
     totalSessions: counters.sessions,
     totalAnnotations: counters.annotations,
   };
@@ -63,11 +88,16 @@ export async function getStatus(): Promise<VaultStatus> {
 export async function ensureWritable(): Promise<FileSystemDirectoryHandle> {
   const handle = await resolveHandle();
   if (!handle) {
-    throw new Error('Vault is not configured. Open the DOMPin popup and pick a folder.');
+    throw new Error('Vault is not configured. Open the DOMPin side panel and pick a folder.');
   }
   const perm = await queryRootPermission();
   if (perm !== 'granted') {
     throw new Error('Vault permission lost. Click the DOMPin icon and reconnect to grant access.');
+  }
+  const h = await runHealthCheck(handle);
+  cachedHealth = { ts: Date.now(), ok: h.ok, reason: h.ok ? null : h.reason };
+  if (!h.ok) {
+    throw new Error(`Vault folder unreachable: ${h.reason}`);
   }
   return handle;
 }
@@ -76,4 +106,23 @@ export async function clearVault(): Promise<void> {
   await clearRootHandle();
   invalidateHandleCache();
   log.info('vault cleared');
+}
+
+async function runHealthCheck(
+  handle: FileSystemDirectoryHandle,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const file = await handle.getFileHandle(HEALTH_FILE, { create: true });
+    const writable = await file.createWritable();
+    try {
+      await writable.write(new Date().toISOString());
+    } finally {
+      await writable.close();
+    }
+    return { ok: true };
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    log.warn('health check failed', reason);
+    return { ok: false, reason };
+  }
 }

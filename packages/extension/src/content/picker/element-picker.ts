@@ -15,6 +15,7 @@ export interface PickerCallbacks {
 
 export class Picker {
   private active = false;
+  private paused = false;
   private hoverTimer: number | null = null;
   private regionStart: { x: number; y: number } | null = null;
 
@@ -27,6 +28,7 @@ export class Picker {
   start(): void {
     if (this.active) return;
     this.active = true;
+    this.paused = false;
     applyCrosshairCursor();
     addEventListener('mousemove', this.onMouseMove, true);
     addEventListener('mousedown', this.onMouseDown, true);
@@ -39,6 +41,7 @@ export class Picker {
   stop(): void {
     if (!this.active) return;
     this.active = false;
+    this.paused = false;
     removeCrosshairCursor();
     removeEventListener('mousemove', this.onMouseMove, true);
     removeEventListener('mousedown', this.onMouseDown, true);
@@ -52,12 +55,36 @@ export class Picker {
     this.highlight.hide();
   }
 
+  pause(): void {
+    if (!this.active || this.paused) return;
+    this.paused = true;
+    this.clearHoverTimer();
+    this.regionStart = null;
+    this.regionRect.hide();
+    this.highlight.hide();
+    removeCrosshairCursor();
+  }
+
+  resume(): void {
+    if (!this.active || !this.paused) return;
+    this.paused = false;
+    applyCrosshairCursor();
+  }
+
   isActive(): boolean {
     return this.active;
   }
 
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  private isLive(): boolean {
+    return this.active && !this.paused;
+  }
+
   private onMouseMove = (ev: MouseEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     if (this.regionStart) {
       this.updateRegion(ev.clientX, ev.clientY);
       return;
@@ -66,7 +93,7 @@ export class Picker {
   };
 
   private onMouseDown = (ev: MouseEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     if (ev.button !== 0) return;
     const target = this.targetElement(ev);
     if (!target) return;
@@ -80,7 +107,7 @@ export class Picker {
   };
 
   private onMouseUp = (ev: MouseEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     if (!this.regionStart) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
@@ -96,7 +123,7 @@ export class Picker {
   };
 
   private onClickCapture = (ev: MouseEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     if (ev.button !== 0) return;
     const target = this.targetElement(ev);
     if (!target) {
@@ -115,7 +142,7 @@ export class Picker {
   };
 
   private onKeyDown = (ev: KeyboardEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
       ev.stopImmediatePropagation();
@@ -124,7 +151,7 @@ export class Picker {
   };
 
   private onContextMenu = (ev: MouseEvent): void => {
-    if (!this.active) return;
+    if (!this.isLive()) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
     this.cb.onCancel();

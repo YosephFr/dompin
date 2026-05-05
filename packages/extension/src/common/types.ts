@@ -108,6 +108,8 @@ export interface VaultStatus {
   rootName: string | null;
   hasPermission: boolean;
   needsReconnect: boolean;
+  unreachable: boolean;
+  unreachableReason: string | null;
   totalSessions: number;
   totalAnnotations: number;
 }

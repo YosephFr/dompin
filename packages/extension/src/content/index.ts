@@ -63,9 +63,15 @@ class ContentApp {
     }
     if (this.picker.isActive()) {
       this.picker.stop();
+      this.broadcastPickerState(false);
     } else {
       this.picker.start();
+      this.broadcastPickerState(true);
     }
+  }
+
+  private broadcastPickerState(active: boolean): void {
+    void sendRequest({ kind: 'picker:state-broadcast', active });
   }
 
   private isOurDom(el: Element): boolean {
@@ -88,7 +94,7 @@ class ContentApp {
   }
 
   private handlePickElement(el: Element): void {
-    this.picker.stop();
+    this.picker.pause();
     const rect = el.getBoundingClientRect();
     const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     const selectorPreview = previewSelector(el);
@@ -98,24 +104,27 @@ class ContentApp {
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
         await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
+        this.picker.resume();
       },
       onCancel: () => {
         this.highlight.hide();
+        this.picker.resume();
       },
     });
   }
 
   private handlePickRegion(rect: RectInfo): void {
-    this.picker.stop();
+    this.picker.pause();
     this.popup.open({
       anchorRect: rect,
       selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
         await this.runCapture({ kind: 'region', rect, comment, voiceTranscript }, rect);
+        this.picker.resume();
       },
       onCancel: () => {
-        /* noop */
+        this.picker.resume();
       },
     });
   }
@@ -165,8 +174,14 @@ class ContentApp {
   }
 
   private handleCancel(): void {
-    this.picker.stop();
-    this.popup.close();
+    if (this.popup.isOpen()) {
+      this.popup.close();
+      return;
+    }
+    if (this.picker.isActive()) {
+      this.picker.stop();
+      this.broadcastPickerState(false);
+    }
   }
 
   private handleMarkerClick(id: string, ev: MouseEvent): void {
@@ -199,6 +214,9 @@ class ContentApp {
         case 'annotate:context':
           this.handleAnnotateContext();
           sendResponse({ ok: true });
+          return false;
+        case 'picker:query-state':
+          sendResponse({ ok: true, active: this.picker.isActive() });
           return false;
         case 'pins:update':
           void this.refreshMarkers();

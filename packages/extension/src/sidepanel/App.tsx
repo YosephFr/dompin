@@ -11,11 +11,12 @@ import {
   type Busy,
   type OriginTab,
 } from './utils.js';
-import { ErrorBanner, Foot, Head } from './components/Chrome.js';
+import { ErrorBanner, Foot, Head, UnreachableBanner } from './components/Chrome.js';
 import { ReconnectCard, WizardCard } from './components/WizardCard.js';
 import { ActiveSessionCard } from './components/ActiveSessionCard.js';
 import { PinListCard } from './components/PinListCard.js';
 import { RecentSessionsCard } from './components/RecentSessionsCard.js';
+import { PickerHero, type PickerState } from './components/PickerHero.js';
 
 export function App(): JSX.Element {
   const [state, setState] = useState<ExtensionState | null>(null);
@@ -30,6 +31,7 @@ export function App(): JSX.Element {
   const [newDraft, setNewDraft] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<string>('');
+  const [showOnboardingForced, setShowOnboardingForced] = useState(false);
   const originRef = useRef<OriginTab>(EMPTY_ORIGIN);
   const stateRef = useRef<ExtensionState | null>(null);
 
@@ -41,8 +43,20 @@ export function App(): JSX.Element {
         void onTabChange();
       }
     };
+    const onMessage = (msg: unknown, sender: chrome.runtime.MessageSender): boolean | undefined => {
+      if (!msg || typeof msg !== 'object' || !('kind' in msg)) return false;
+      const m = msg as { kind: string; active?: boolean };
+      if (m.kind === 'picker:state-broadcast') {
+        if (sender.tab?.id === originRef.current.tabId) {
+          setPickerOn(Boolean(m.active));
+        }
+        return false;
+      }
+      return false;
+    };
     chrome.tabs.onActivated.addListener(onTabActivated);
     chrome.tabs.onUpdated.addListener(onTabUpdated);
+    chrome.runtime.onMessage.addListener(onMessage);
     const interval = window.setInterval(() => {
       if (document.hidden) return;
       void refreshPins();
@@ -50,6 +64,7 @@ export function App(): JSX.Element {
     return () => {
       chrome.tabs.onActivated.removeListener(onTabActivated);
       chrome.tabs.onUpdated.removeListener(onTabUpdated);
+      chrome.runtime.onMessage.removeListener(onMessage);
       window.clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,6 +84,7 @@ export function App(): JSX.Element {
     if (resp.state.vault.configured && !resp.state.vault.needsReconnect) {
       await loadSessionData(resp.state.vault, tab);
     }
+    void queryPickerState(tab.tabId);
   }
 
   async function onTabChange(): Promise<void> {
@@ -78,6 +94,22 @@ export function App(): JSX.Element {
     const cur = stateRef.current;
     if (cur?.vault.configured && !cur.vault.needsReconnect) {
       await loadSessionData(cur.vault, tab);
+    }
+    void queryPickerState(tab.tabId);
+  }
+
+  async function queryPickerState(tabId: number | null): Promise<void> {
+    if (tabId == null) {
+      setPickerOn(false);
+      return;
+    }
+    try {
+      const r = (await chrome.tabs.sendMessage(tabId, { kind: 'picker:query-state' })) as
+        | { ok: true; active: boolean }
+        | undefined;
+      setPickerOn(Boolean(r?.active));
+    } catch {
+      setPickerOn(false);
     }
   }
 
@@ -139,6 +171,7 @@ export function App(): JSX.Element {
         stateRef.current = next;
         return next;
       });
+      setShowOnboardingForced(false);
       await loadSessionData(r.vault, originRef.current);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
@@ -178,11 +211,7 @@ export function App(): JSX.Element {
     setError(null);
     try {
       const r = await sendRequest({ kind: 'toggle-picker' });
-      if (!r.ok) {
-        setError(r.error);
-        return;
-      }
-      setPickerOn((v) => !v);
+      if (!r.ok) setError(r.error);
     } finally {
       setBusy(null);
     }
@@ -254,8 +283,12 @@ export function App(): JSX.Element {
     }
   }
 
-  async function archiveActive(): Promise<void> {
+  async function endSession(): Promise<void> {
     if (!activeSession) return;
+    const ok = window.confirm(
+      'End this session? You can start a new one anytime. Your files stay where they are.',
+    );
+    if (!ok) return;
     setBusy('archive');
     setError(null);
     try {
@@ -320,24 +353,53 @@ export function App(): JSX.Element {
     chrome.runtime.openOptionsPage();
   }
 
+  function showOnboarding(): void {
+    setShowOnboardingForced(true);
+  }
+
+  function openVaultFolder(): void {
+    setError('Chrome does not allow opening folders directly. Open Finder or Explorer manually.');
+  }
+
   if (!state) {
     return (
       <div className="shell">
-        <Head onSettings={openSettings} />
+        <Head
+          onOpenSettings={openSettings}
+          onShowOnboarding={showOnboarding}
+          onOpenVaultFolder={openVaultFolder}
+          vaultConfigured={false}
+        />
         <div className="loading">Loading…</div>
       </div>
     );
   }
 
   const vault = state.vault;
+  const isVaultReady = vault.configured && !vault.needsReconnect && !vault.unreachable;
+  const showWizard = !vault.configured || showOnboardingForced;
+  const pickerState: PickerState = pickerOn ? 'on' : 'off';
 
   return (
     <div className="shell">
-      <Head onSettings={openSettings} />
+      <Head
+        onOpenSettings={openSettings}
+        onShowOnboarding={showOnboarding}
+        onOpenVaultFolder={openVaultFolder}
+        vaultConfigured={vault.configured && !vault.unreachable}
+      />
       <div className="body">
         {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
 
-        {!vault.configured ? (
+        {vault.configured && vault.unreachable ? (
+          <UnreachableBanner
+            reason={vault.unreachableReason}
+            onPickAnother={() => void pickFolder()}
+            onReconnect={() => void reconnect()}
+          />
+        ) : null}
+
+        {showWizard ? (
           <WizardCard busy={busy === 'pick'} onPick={() => void pickFolder()} />
         ) : vault.needsReconnect ? (
           <ReconnectCard
@@ -348,14 +410,17 @@ export function App(): JSX.Element {
           />
         ) : (
           <>
+            <PickerHero
+              state={pickerState}
+              busy={busy === 'toggle'}
+              onToggle={() => void togglePicker()}
+            />
             <ActiveSessionCard
               session={activeSession}
               domain={origin.domain}
-              pickerOn={pickerOn}
               busy={busy}
               renameDraft={renameDraft}
               newDraft={newDraft}
-              onTogglePicker={() => void togglePicker()}
               onStartNew={startNewSession}
               onCommitNew={(n) => void commitNewSession(n)}
               onCancelNew={() => setNewDraft(null)}
@@ -364,7 +429,7 @@ export function App(): JSX.Element {
               onCommitRename={(e) => void commitRename(e)}
               onCancelRename={() => setRenameDraft(null)}
               onRenameDraftChange={setRenameDraft}
-              onArchive={() => void archiveActive()}
+              onEndSession={() => void endSession()}
             />
             <PinListCard
               pins={pins}
@@ -388,7 +453,7 @@ export function App(): JSX.Element {
       <Foot
         rootName={vault.rootName}
         configured={vault.configured && !vault.needsReconnect}
-        onSettings={openSettings}
+        unreachable={vault.unreachable}
       />
     </div>
   );

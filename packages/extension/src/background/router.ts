@@ -183,6 +183,9 @@ async function handle(
       await saveSettings(mergeSettings(req.settings));
       return ok({});
     }
+    case 'picker:state-broadcast': {
+      return ok({});
+    }
   }
 }
 
