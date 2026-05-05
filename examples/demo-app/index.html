@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" data-testid="root-html">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOMPin · Demo App</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar" data-testid="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">DOMPin Demo</span>
+      </div>
+      <nav class="topbar-nav">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#orders">Orders</a>
+        <a href="#customers">Customers</a>
+        <a href="#settings">Settings</a>
+      </nav>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost" type="button">Help</button>
+        <button class="btn btn-primary" type="button" data-testid="btn-new">New order</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" data-testid="sidebar">
+        <ul class="sidebar-list">
+          <li class="sidebar-item is-active">Inbox</li>
+          <li class="sidebar-item">Pending</li>
+          <li class="sidebar-item">Shipped</li>
+          <li class="sidebar-item">Returns</li>
+          <li class="sidebar-item">Archived</li>
+        </ul>
+      </aside>
+
+      <section class="content">
+        <div class="page-header">
+          <h1 class="page-title" id="orders">Orders</h1>
+          <p class="page-subtitle">A representative dataset for testing element pickers.</p>
+        </div>
+
+        <div class="cards" data-testid="card-grid">
+          <article class="card" data-testid="card-1">
+            <div class="card-head">
+              <span class="badge badge-pending">Pending</span>
+              <span class="card-id">#ORD-1042</span>
+            </div>
+            <h3 class="card-title">Wireless headphones</h3>
+            <p class="card-meta">Qty 2 · USD 198.00</p>
+            <div class="card-actions">
+              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-secondary" type="button">Mark shipped</button>
+            </div>
+          </article>
+
+          <article class="card" data-testid="card-2">
+            <div class="card-head">
+              <span class="badge badge-shipped">Shipped</span>
+              <span class="card-id">#ORD-1041</span>
+            </div>
+            <h3 class="card-title">Mechanical keyboard</h3>
+            <p class="card-meta">Qty 1 · USD 149.00</p>
+            <div class="card-actions">
+              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-secondary" type="button">Track</button>
+            </div>
+          </article>
+
+          <article class="card" data-testid="card-3">
+            <div class="card-head">
+              <span class="badge badge-returned">Returned</span>
+              <span class="card-id">#ORD-1037</span>
+            </div>
+            <h3 class="card-title">Standing desk mat</h3>
+            <p class="card-meta">Qty 1 · USD 39.00</p>
+            <div class="card-actions">
+              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-secondary" type="button">Refund</button>
+            </div>
+          </article>
+
+          <article class="card" data-testid="card-4">
+            <div class="card-head">
+              <span class="badge badge-pending">Pending</span>
+              <span class="card-id">#ORD-1036</span>
+            </div>
+            <h3 class="card-title">USB-C hub</h3>
+            <p class="card-meta">Qty 3 · USD 87.00</p>
+            <div class="card-actions">
+              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-secondary" type="button">Mark shipped</button>
+            </div>
+          </article>
+        </div>
+
+        <div class="form-section">
+          <h2 class="section-title">Quick filter</h2>
+          <form class="form" id="filter-form">
+            <div class="form-row">
+              <label for="search">Search</label>
+              <input
+                id="search"
+                name="search"
+                type="search"
+                placeholder="Order id or customer"
+              />
+            </div>
+            <div class="form-row">
+              <label for="status">Status</label>
+              <select id="status" name="status">
+                <option value="">All</option>
+                <option value="pending">Pending</option>
+                <option value="shipped">Shipped</option>
+                <option value="returned">Returned</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="from">From</label>
+              <input id="from" name="from" type="date" />
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" type="submit">Apply</button>
+              <button class="btn btn-ghost" type="reset">Reset</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-wrap" data-testid="orders-table">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>#ORD-1042</td><td>Acme Inc.</td><td>USD 198.00</td><td><span class="badge badge-pending">Pending</span></td></tr>
+              <tr><td>#ORD-1041</td><td>Globex</td><td>USD 149.00</td><td><span class="badge badge-shipped">Shipped</span></td></tr>
+              <tr><td>#ORD-1037</td><td>Initech</td><td>USD 39.00</td><td><span class="badge badge-returned">Returned</span></td></tr>
+              <tr><td>#ORD-1036</td><td>Stark Industries</td><td>USD 87.00</td><td><span class="badge badge-pending">Pending</span></td></tr>
+              <tr><td>#ORD-1031</td><td>Wayne Enterprises</td><td>USD 312.00</td><td><span class="badge badge-shipped">Shipped</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>DOMPin demo · static page for picker testing</span>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
