@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-05-05
+
+### Fixed
+
+- Side panel crashed with `TypeError: Cannot read properties of undefined (reading 'theme')` when settings persisted by v0.1.0 were loaded by v0.2.0. The theme/locale lookups now fall back to defaults when `settings.preferences` is missing.
+
 ## [0.2.0] — 2026-05-05
 
 ### Added
@@ -86,5 +92,6 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.2.1]: https://github.com/YosephFr/dompin/releases/tag/v0.2.1
 [0.2.0]: https://github.com/YosephFr/dompin/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YosephFr/dompin/releases/tag/v0.1.0

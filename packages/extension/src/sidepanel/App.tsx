@@ -5,6 +5,7 @@ import { sendRequest } from '../common/messaging.js';
 import { requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
 import { I18nProvider, resolveLocale, useT } from '../common/i18n/index.js';
 import type { LocalePreference, Settings, ThemePreference } from '../common/settings.js';
+import { DEFAULT_SETTINGS } from '../common/settings.js';
 import { applyTheme } from './theme.js';
 import {
   busyDeleteId,
@@ -58,8 +59,9 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
 
   useEffect(() => {
     if (!state) return;
-    applyTheme(state.settings.preferences.theme);
-    onLocaleResolve(resolveLocale(state.settings.preferences.locale));
+    const prefs = state.settings.preferences ?? DEFAULT_SETTINGS.preferences;
+    applyTheme(prefs.theme);
+    onLocaleResolve(resolveLocale(prefs.locale));
   }, [state, onLocaleResolve]);
 
   useEffect(() => {
@@ -439,14 +441,16 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     const cur = stateRef.current;
     if (!cur) return;
     applyTheme(theme);
-    void persistPreferences({ ...cur.settings.preferences, theme });
+    const prefs = cur.settings.preferences ?? DEFAULT_SETTINGS.preferences;
+    void persistPreferences({ ...prefs, theme });
   }
 
   function setLocalePref(locale: LocalePreference): void {
     const cur = stateRef.current;
     if (!cur) return;
     onLocaleResolve(resolveLocale(locale));
-    void persistPreferences({ ...cur.settings.preferences, locale });
+    const prefs = cur.settings.preferences ?? DEFAULT_SETTINGS.preferences;
+    void persistPreferences({ ...prefs, locale });
   }
 
   if (!state) {
@@ -476,9 +480,9 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
       <Head
         onOpenSettings={openSettings}
         onShowOnboarding={showOnboarding}
-        theme={state.settings.preferences.theme}
+        theme={state.settings.preferences?.theme ?? 'auto'}
         onThemeChange={setThemePref}
-        locale={state.settings.preferences.locale}
+        locale={state.settings.preferences?.locale ?? 'auto'}
         onLocaleChange={setLocalePref}
       />
       <div className="body">
