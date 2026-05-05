@@ -1,4 +1,4 @@
-import type { ComputedStyleSubset } from '@dompin/shared';
+import type { ComputedStyleSubset } from '../../common/types.js';
 
 const LAYOUT_PROPS = [
   'display',

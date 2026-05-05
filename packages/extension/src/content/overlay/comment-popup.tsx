@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { RectInfo } from '@dompin/shared';
+import type { RectInfo } from '../../common/types.js';
 
 interface PopupOptions {
   anchorRect: RectInfo;

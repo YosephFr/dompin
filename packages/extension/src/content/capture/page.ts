@@ -1,4 +1,4 @@
-import type { PageContext } from '@dompin/shared';
+import type { PageContext } from '../../common/types.js';
 
 export function capturePage(): PageContext {
   const colorScheme: 'light' | 'dark' = matchesDark() ? 'dark' : 'light';

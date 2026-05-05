@@ -1,4 +1,4 @@
-import type { RectInfo } from '@dompin/shared';
+import type { RectInfo, PinForPage } from '../common/types.js';
 import type { TabCommand } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { isOriginAllowed, type Settings } from '../common/settings.js';
@@ -10,7 +10,6 @@ import { Highlight } from './overlay/highlight.js';
 import { RegionRect } from './overlay/region-rect.js';
 import { MarkerManager } from './overlay/markers.js';
 import { CommentPopup } from './overlay/comment-popup.js';
-import { showPulse } from './overlay/pulse.js';
 import { Picker } from './picker/element-picker.js';
 import { buildAnnotation } from './capture/index.js';
 import { uniqueSelector } from './capture/selector.js';
@@ -67,10 +66,7 @@ class ContentApp {
   }
 
   private async refreshMarkers(): Promise<void> {
-    const r = await sendRequest<{ pins: import('../common/messaging.js').PinForPage[] }>({
-      kind: 'pins:for-url',
-      url: location.href,
-    });
+    const r = await sendRequest<{ pins: PinForPage[] }>({ kind: 'pins:for-tab' });
     if (r.ok) this.markers.update(r.pins);
   }
 
@@ -89,9 +85,9 @@ class ContentApp {
             { kind: 'element', element: el, comment, voiceTranscript },
             this.settings,
           );
-          const resp = await sendRequest<{ id: string }>({ kind: 'pin', payload });
+          const resp = await sendRequest({ kind: 'annotation:add', payload });
           if (!resp.ok) {
-            log.warn('pin failed', resp.error);
+            log.warn('annotation add failed', resp.error);
           }
           await this.refreshMarkers();
         } catch (e) {
@@ -116,8 +112,8 @@ class ContentApp {
             { kind: 'region', rect, comment, voiceTranscript },
             this.settings,
           );
-          const resp = await sendRequest<{ id: string }>({ kind: 'pin', payload });
-          if (!resp.ok) log.warn('pin failed', resp.error);
+          const resp = await sendRequest({ kind: 'annotation:add', payload });
+          if (!resp.ok) log.warn('annotation add failed', resp.error);
           await this.refreshMarkers();
         } catch (e) {
           log.error('build annotation failed', e);
@@ -139,7 +135,7 @@ class ContentApp {
     ev.stopPropagation();
     const remove = window.confirm('Remove this DOMPin annotation?');
     if (!remove) return;
-    void sendRequest({ kind: 'cancel', id }).then((r) => {
+    void sendRequest({ kind: 'annotation:cancel', annotationId: id }).then((r) => {
       if (r.ok) void this.refreshMarkers();
     });
   }
@@ -159,14 +155,6 @@ class ContentApp {
           return false;
         case 'picker:close':
           if (this.picker.isActive()) this.picker.stop();
-          sendResponse({ ok: true });
-          return false;
-        case 'highlight':
-          this.executeHighlight(cmd.selector, cmd.durationMs ?? 1500);
-          sendResponse({ ok: true });
-          return false;
-        case 'scrollTo':
-          this.executeScrollTo(cmd.selector, cmd.behavior ?? 'smooth');
           sendResponse({ ok: true });
           return false;
         case 'pins:update':
@@ -213,31 +201,6 @@ class ContentApp {
       (history as unknown as { __dompinPatched: boolean }).__dompinPatched = true;
     }
     addEventListener('dompin:locationchange', checkUrl);
-  }
-
-  private executeHighlight(selector: string, durationMs: number): void {
-    let el: Element | null = null;
-    try {
-      el = document.querySelector(selector);
-    } catch {
-      return;
-    }
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return;
-    showPulse(this.overlay.layer, { x: r.x, y: r.y, width: r.width, height: r.height }, durationMs);
-    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-  }
-
-  private executeScrollTo(selector: string, behavior: ScrollBehavior): void {
-    let el: Element | null = null;
-    try {
-      el = document.querySelector(selector);
-    } catch {
-      return;
-    }
-    if (!el) return;
-    el.scrollIntoView({ behavior, block: 'center', inline: 'nearest' });
   }
 
   private shutdown(): void {

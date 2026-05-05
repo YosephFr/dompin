@@ -1,4 +1,4 @@
-import type { AnnotationPayload, RectInfo } from '@dompin/shared';
+import type { AnnotationPayload, RectInfo } from '../../common/types.js';
 import { sendRequest } from '../../common/messaging.js';
 import { newId } from '../../common/id.js';
 import type { Settings } from '../../common/settings.js';

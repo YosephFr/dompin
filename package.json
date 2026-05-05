@@ -2,7 +2,7 @@
   "name": "dompin",
   "version": "0.1.0",
   "private": true,
-  "description": "Pin elements on any web page and send them to your AI coding agent with full DOM context, screenshots, and component info.",
+  "description": "Pin elements on any web page and write annotated DOM context, screenshots, and component info to a local folder for your AI coding agent.",
   "license": "MIT",
   "author": "Yoseph Franco <yosephfr@icloud.com>",
   "homepage": "https://github.com/YosephFr/dompin#readme",
@@ -14,15 +14,14 @@
     "url": "https://github.com/YosephFr/dompin/issues"
   },
   "keywords": [
-    "mcp",
-    "model-context-protocol",
     "chrome-extension",
     "annotation",
     "claude-code",
     "cursor",
     "ai-coding",
     "dom",
-    "devtools"
+    "devtools",
+    "file-system-access"
   ],
   "scripts": {
     "build": "pnpm -r build",
@@ -31,8 +30,7 @@
     "clean": "pnpm -r clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,html,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,html,css}\"",
-    "smoke": "pnpm --filter @dompin/server smoke",
-    "validate": "pnpm typecheck && pnpm build && pnpm smoke"
+    "validate": "pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

@@ -1,4 +1,4 @@
-import type { ElementContext, RectInfo } from '@dompin/shared';
+import type { ElementContext, RectInfo } from '../../common/types.js';
 import { uniqueSelector } from './selector.js';
 import { xpathOf } from './xpath.js';
 import { categorizedStyles } from './styles.js';

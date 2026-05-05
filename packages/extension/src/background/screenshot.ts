@@ -1,4 +1,4 @@
-import type { RectInfo } from '@dompin/shared';
+import type { RectInfo } from '../common/types.js';
 
 export async function captureViewport(tabId: number): Promise<string> {
   return new Promise((resolve, reject) => {

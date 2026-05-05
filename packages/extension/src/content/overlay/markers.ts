@@ -1,4 +1,4 @@
-import type { PinForPage } from '../../common/messaging.js';
+import type { PinForPage } from '../../common/types.js';
 
 export interface MarkerCallbacks {
   onMarkerClick: (id: string, ev: MouseEvent) => void;

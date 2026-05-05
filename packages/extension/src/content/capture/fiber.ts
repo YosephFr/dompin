@@ -1,4 +1,4 @@
-import type { ReactInfo, ReactSource } from '@dompin/shared';
+import type { ReactInfo, ReactSource } from '../../common/types.js';
 
 interface FiberLike {
   type?: unknown;
