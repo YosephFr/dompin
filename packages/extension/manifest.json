@@ -3,7 +3,7 @@
   "name": "DOMPin",
   "version": "0.1.0",
   "description": "Pin elements on any web page and send them to your AI coding agent.",
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "unlimitedStorage"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "unlimitedStorage", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "public/icons/icon-16.png",
@@ -12,8 +12,7 @@
     "128": "public/icons/icon-128.png"
   },
   "action": {
-    "default_popup": "src/popup/popup.html",
-    "default_title": "DOMPin",
+    "default_title": "DOMPin — click to toggle picker, right-click for queue",
     "default_icon": {
       "16": "public/icons/icon-16.png",
       "32": "public/icons/icon-32.png",

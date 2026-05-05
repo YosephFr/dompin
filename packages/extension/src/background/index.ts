@@ -2,6 +2,7 @@ import type { Settings } from '../common/settings.js';
 import { DEFAULT_SETTINGS } from '../common/settings.js';
 import { loadSettings, saveSettings } from '../common/storage.js';
 import { createLogger } from '../common/logger.js';
+import { setupActions } from './actions.js';
 import { setupCommands } from './commands.js';
 import { setupRouter, relayServerCommand } from './router.js';
 import { onQueueMutate } from './queue.js';
@@ -27,6 +28,7 @@ async function bootstrap(): Promise<void> {
     },
   });
 
+  setupActions();
   setupCommands();
 
   setupRouter({
