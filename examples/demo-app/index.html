@@ -24,6 +24,17 @@
       </div>
     </header>
 
+    <section class="welcome" data-testid="welcome">
+      <div class="welcome-inner">
+        <span class="welcome-pill">Demo</span>
+        <p class="welcome-text">
+          Click the DOMPin icon to open the side panel and start picking, or right-click any element
+          here and choose <strong>Annotate element with DOMPin</strong>. Try it on the modal too —
+          it stays open through the right-click flow.
+        </p>
+      </div>
+    </section>
+
     <main class="layout">
       <aside class="sidebar" data-testid="sidebar">
         <ul class="sidebar-list">
@@ -50,7 +61,7 @@
             <h3 class="card-title">Wireless headphones</h3>
             <p class="card-meta">Qty 2 · USD 198.00</p>
             <div class="card-actions">
-              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-ghost" type="button" data-action="open-modal">View</button>
               <button class="btn btn-secondary" type="button">Mark shipped</button>
             </div>
           </article>
@@ -63,7 +74,7 @@
             <h3 class="card-title">Mechanical keyboard</h3>
             <p class="card-meta">Qty 1 · USD 149.00</p>
             <div class="card-actions">
-              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-ghost" type="button" data-action="open-modal">View</button>
               <button class="btn btn-secondary" type="button">Track</button>
             </div>
           </article>
@@ -76,7 +87,7 @@
             <h3 class="card-title">Standing desk mat</h3>
             <p class="card-meta">Qty 1 · USD 39.00</p>
             <div class="card-actions">
-              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-ghost" type="button" data-action="open-modal">View</button>
               <button class="btn btn-secondary" type="button">Refund</button>
             </div>
           </article>
@@ -89,7 +100,7 @@
             <h3 class="card-title">USB-C hub</h3>
             <p class="card-meta">Qty 3 · USD 87.00</p>
             <div class="card-actions">
-              <button class="btn btn-ghost" type="button">View</button>
+              <button class="btn btn-ghost" type="button" data-action="open-modal">View</button>
               <button class="btn btn-secondary" type="button">Mark shipped</button>
             </div>
           </article>
@@ -172,6 +183,50 @@
     <footer class="footer">
       <span>DOMPin demo · static page for picker testing</span>
     </footer>
+
+    <div class="modal" id="edit-modal" hidden data-testid="modal">
+      <div class="modal-backdrop" data-action="close-modal"></div>
+      <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        data-testid="modal-card"
+      >
+        <header class="modal-head">
+          <h2 class="modal-title" id="modal-title">Order details</h2>
+          <button class="btn btn-ghost" type="button" data-action="close-modal" aria-label="Close">
+            ✕
+          </button>
+        </header>
+        <div class="modal-body">
+          <div class="modal-row">
+            <span class="modal-label">Order ID</span>
+            <span class="modal-value">#ORD-1042</span>
+          </div>
+          <div class="modal-row">
+            <span class="modal-label">Customer</span>
+            <span class="modal-value">Acme Inc.</span>
+          </div>
+          <div class="modal-row">
+            <span class="modal-label">Total</span>
+            <span class="modal-value">USD 198.00</span>
+          </div>
+          <div class="modal-row">
+            <span class="modal-label">Status</span>
+            <span class="badge badge-pending">Pending</span>
+          </div>
+          <p class="modal-hint">
+            Right-click any field above and choose <strong>Annotate element with DOMPin</strong>.
+            The modal stays open, the side panel records your note.
+          </p>
+        </div>
+        <footer class="modal-foot">
+          <button class="btn btn-ghost" type="button" data-action="close-modal">Cancel</button>
+          <button class="btn btn-primary" type="button">Save changes</button>
+        </footer>
+      </div>
+    </div>
 
     <script src="./script.js"></script>
   </body>

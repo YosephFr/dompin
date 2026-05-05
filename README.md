@@ -6,9 +6,9 @@ DOMPin is a Chrome extension that lets you click any element on any web page, dr
 
 ## How it works
 
-1. Install the extension and open it once. Pick a folder where DOMPin will write annotations.
-2. On any web page, click the DOMPin icon to start pinning. Click an element, type a comment, press Enter.
-3. The extension writes a Markdown file plus a screenshot for every pin, organized by domain and session.
+1. Install the extension. The first time it loads, a side panel opens on a demo page and walks you through picking a folder.
+2. On any web page, click the DOMPin icon to open the side panel and start picking. Click an element, type a comment, press Enter.
+3. The extension writes a Markdown file plus two PNG screenshots for every pin, organized by domain and session.
 4. Open the folder in your editor and let your AI agent work from it.
 
 ## File layout
@@ -19,20 +19,24 @@ DOMPin is a Chrome extension that lets you click any element on any web page, dr
     20260505-1432__landing_a1f2/
       README.md
       01.md
-      01.png
+      01.element.png
       01.viewport.png
       01.json
       02.md
-      02.png
+      02.element.png
       02.viewport.png
       02.json
 ```
 
-Each `NN.md` contains your comment, the picked element data, and links to the screenshots. `NN.json` carries the full structured payload for tools that prefer to parse rather than read prose. See [docs/file-schema.md](docs/file-schema.md) for the full specification.
+Each `NN.md` contains your comment, the picked element data, and links to the screenshots. `NN.element.png` is a clean crop of the picked element with padding. `NN.viewport.png` is the full viewport with all annotation markers, the highlight, and the element infobox visible — so the agent can see exactly what you saw. `NN.json` carries the full structured payload for tools that prefer to parse rather than read prose. See [docs/file-schema.md](docs/file-schema.md) for the full specification.
 
 ## Sessions
 
-Each browser tab starts a session the first time you pin something on it. Right-click the DOMPin icon to open the session panel, where you can rename the active session, archive it, or start a new one in the same tab.
+Each browser tab starts a session the first time you pin something on it. The side panel shows the active session, the list of pins on the current page (with edit and delete), and recent sessions for the same domain. Use the **New session** button to split work into multiple sessions in the same tab.
+
+## Annotating without dismissing modals
+
+Open elements that disappear when you click outside them (popovers, modals, dropdowns) are notoriously hard to capture with a regular picker. DOMPin adds an **Annotate element with DOMPin** entry to the browser's native right-click menu — pick it on any element and the comment popup opens for that element without dismissing whatever was already visible.
 
 ## Privacy
 
