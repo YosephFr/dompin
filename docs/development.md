@@ -9,17 +9,15 @@ dompin/
 ├── packages/
 │   └── extension/        # Chrome extension (Vite + crxjs + React 18)
 │       └── src/
-│           ├── background/  # service worker: sessions, vault, file writes
+│           ├── background/  # service worker: sessions, vault, file writes, picker gate
 │           ├── content/     # picker overlay, comment popup, capture pipeline
-│           ├── popup/       # popup window UI
-│           ├── options/     # options page + setup wizard
+│           ├── sidepanel/   # side-panel UI (React): wizard, session card, picker hero, pin list
+│           ├── options/     # options page (React)
 │           └── common/      # shared types, settings, messaging, vault handle
 ├── examples/
 │   └── demo-app/         # static page for manual picker QA
 └── docs/                 # installation, architecture, file schema, this file
 ```
-
-There used to be `packages/shared` and `packages/server`. Both were removed when DOMPin moved from a WebSocket / MCP bridge to direct file system writes. If you find references to them in old comments or branches, treat them as historical.
 
 ## First-time setup
 
@@ -59,21 +57,25 @@ The repository ships with a strict `tsconfig.base.json`: `strict`, `noUncheckedI
 
 1. `pnpm build`.
 2. Load `packages/extension/dist` as an unpacked extension at `chrome://extensions`.
-3. Right-click the DOMPin icon → **Options**, walk through the wizard, and pick a vault folder. A scratch folder under `/tmp` is fine for experiments.
-4. Open `examples/demo-app/index.html` in your browser, or any real site you have permission to annotate.
-5. Press `Cmd+Shift+.` (macOS) or `Ctrl+Shift+.` (other) to enable the picker.
-6. Hover over a card or button, click to anchor, type a comment, press `Cmd+Enter`.
-7. Open the vault folder. A new domain subfolder and a session subfolder should contain `01.md`, `01.png`, `01.viewport.png`, and `01.json`.
+3. Click the DOMPin icon to open the side panel. The first time, the wizard walks you through picking a vault folder. A scratch folder under `/tmp` is fine for experiments.
+4. Open `examples/demo-app/index.html` (served from the extension) or any real site you have permission to annotate.
+5. In the side panel, click **Start new session** in the Session card. Name it and press Enter — the picker arms automatically.
+6. Hover over a card or button, click to anchor, type a comment, press `Cmd+Enter`. The picker stays on for the next pin.
+7. Try the one-shot shortcut: press `Cmd+Shift+.` (or `Ctrl+Shift+.`) on a fresh element. The picker captures one element and auto-stops.
+8. Try the right-click flow on a hover-only element: right-click → **Annotate element with DOMPin** → confirm the popup captures that element without dismissing it.
+9. Open the vault folder. A new domain subfolder and a session subfolder should contain `01.md`, `01.element.png`, `01.viewport.png`, and `01.json`.
+10. Click **End session** in the side panel: the picker stops, the session card returns to the empty state.
 
-The session panel (right-click the DOMPin icon) lets you rename, archive, or start a new session in the same tab.
+The session card also lets you rename the active session, start a new one, or end it. The pin list below shows annotations for the current page with edit and delete in place.
 
 ## Conventions
 
 - TypeScript strict, no implicit `any`.
 - Many small files: 200-400 lines typical, 800 max per file.
 - Comments only when the _why_ is non-obvious; never paraphrase the code.
-- React lives in popup and options. The content script avoids React except for the comment popup, which mounts inside a Shadow DOM root for isolation.
+- React lives in the side panel and the options page. The content script avoids React except for the comment popup, which mounts inside a Shadow DOM root for isolation.
 - All file writes go through the helpers in `src/background/`. Never call `showSaveFilePicker` directly from a UI surface — the wizard's `showDirectoryPicker` is the only direct File System Access API call from a UI.
+- Picker access is gated by an active session. The shared check lives in `src/background/picker-gate.ts`; route any new entry point through it.
 
 ## Releasing
 

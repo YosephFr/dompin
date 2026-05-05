@@ -6,10 +6,11 @@ DOMPin is a Chrome extension that lets you click any element on any web page, dr
 
 ## How it works
 
-1. Install the extension. The first time it loads, a side panel opens on a demo page and walks you through picking a folder.
-2. On any web page, click the DOMPin icon to open the side panel and start picking. Click an element, type a comment, press Enter.
-3. The extension writes a Markdown file plus two PNG screenshots for every pin, organized by domain and session.
-4. Open the folder in your editor and let your AI agent work from it.
+1. Install the extension. The first time it loads, the side panel walks you through picking a folder.
+2. Click the DOMPin icon to open the side panel. Start a named session for the current tab — that becomes a subfolder where this round of annotations will land.
+3. Hit **Start picking**, click any element on the page, type a comment, press Enter. Chain as many as you want — the picker stays on until you stop it.
+4. Need a quick one-off without leaving your flow? Hit `⌘⇧.` (Mac) / `Ctrl⇧.` (Win/Linux) for a single-shot pick that auto-stops, or right-click any element and choose **Annotate element with DOMPin** to capture transient UI like dropdowns and popovers without dismissing them.
+5. Open the vault folder in your editor and let your AI agent work from it.
 
 ## File layout
 
@@ -32,11 +33,17 @@ Each `NN.md` contains your comment, the picked element data, and links to the sc
 
 ## Sessions
 
-Each browser tab starts a session the first time you pin something on it. The side panel shows the active session, the list of pins on the current page (with edit and delete), and recent sessions for the same domain. Use the **New session** button to split work into multiple sessions in the same tab.
+Sessions are explicit and named. The side panel shows the current session for the active tab; **Start new session** opens an inline name field so you can split work into focused folders. The card lists pin count and last-write time at a glance, with **Rename** and **End session** controls on the same row. End session stops the picker and frees the tab — your files stay where they are.
 
-## Annotating without dismissing modals
+Recent sessions for the same domain are listed below for quick context, and pins on the current page can be edited or deleted right from the side panel.
 
-Open elements that disappear when you click outside them (popovers, modals, dropdowns) are notoriously hard to capture with a regular picker. DOMPin adds an **Annotate element with DOMPin** entry to the browser's native right-click menu — pick it on any element and the comment popup opens for that element without dismissing whatever was already visible.
+## Picker modes
+
+- **Sticky** (default, from the side panel button): stays on across multiple pins until you stop it. Best for a focused review of several elements in a row.
+- **One-shot** (`⌘⇧.` / `Ctrl⇧.`): grabs a single element, then auto-stops. Best for an isolated capture without breaking your reading flow.
+- **Right-click context menu**: pick **Annotate element with DOMPin** on any element. The comment popup opens for that exact element without dismissing whatever was already on screen — invaluable for hover dropdowns, modals, and popovers that disappear when you click outside them.
+
+All three require an active session for the tab. If there isn't one, the side panel opens and the Session card flashes so you know where to start.
 
 ## Privacy
 
@@ -51,7 +58,7 @@ pnpm install
 pnpm build
 ```
 
-Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions` (Developer mode → Load unpacked) and open the extension's options page to pick your vault folder. Full instructions in [docs/installation.md](docs/installation.md).
+Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions` (Developer mode → Load unpacked). The first time you click the icon, the side panel's wizard walks you through picking a vault folder. Full instructions in [docs/installation.md](docs/installation.md).
 
 ## Why
 

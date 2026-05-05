@@ -5,73 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed
-
-- BREAKING: removed local MCP server and WebSocket bridge. DOMPin now writes annotations directly to a folder on your machine via the File System Access API. Any AI agent that can read files can consume them.
-- Annotations are organized as `<root>/<domain>/<session>/NN.{md,png,viewport.png,json}` with a per-session `README.md` index regenerated on every write.
-- Sessions are scoped per browser tab; each tab starts a session automatically and a new one can be created from the popup.
-- The extension icon left-click toggles the picker; right-click opens the session panel.
-- Default keyboard shortcut for toggling the picker has been removed; users can assign one manually from `chrome://extensions/shortcuts`.
-
-### Removed
-
-- `@dompin/server` package (MCP stdio + WebSocket bridge).
-- `@dompin/shared` package; protocol types are now local to the extension.
-- WebSocket connection settings from the options page.
-
 ## [0.1.0] — 2026-05-05
 
-Initial release.
+Initial public release.
 
 ### Added
 
-#### Extension (`@dompin/extension`)
+#### Side panel UX
+
+- Setup wizard with five clearly separated steps: pick folder, name a session, pick elements, one-off shortcut, type comment + save.
+- Active-session card with inline name/rename, pin count, last-write time, **Start new session**, **Rename**, and **End session** controls.
+- Picker hero with explicit on/off state, a big primary button, and the keyboard-shortcut hint — only shown once a session exists for the tab.
+- Pin list for the current page with edit and delete in place.
+- Recent sessions for the same domain, surfaced under the active session card.
+- Header overflow menu with **Open settings** and **Show onboarding**.
+- Footer with vault status dot and a pencil icon to change the vault folder without leaving the panel.
+- Error banner and dedicated "vault unreachable" banner with **Pick a new folder** and **Try reconnect** actions.
+
+#### Picker
+
+- Sticky mode (default, from the side-panel button): stays on across multiple pins.
+- One-shot mode (keyboard shortcut `Cmd+Shift+.` on Mac, `Ctrl+Shift+.` on Win/Linux): captures a single element and auto-stops.
+- Right-click **Annotate element with DOMPin** entry that captures the element under the cursor without dismissing modals, popovers, or dropdowns.
+- Element highlight with a DevTools-style infobox showing tag/id/classes and dimensions.
+- Drag-region capture (Shift-drag) for free-region annotations when no single element fits.
+- Robust unique-selector algorithm with `data-testid` / `data-test` / `id` / `aria-label` / class / nth-of-type fallback, generated-class heuristics, and uniqueness validation.
+- Per-page numbered markers, clickable to delete.
+- Provisional marker that anchors over the element being captured (no longer in the upper-left corner of viewport screenshots).
+- Picker is gated by an active session: any attempt to start it without one opens the side panel and flashes the Session card.
+
+#### Capture pipeline
+
+- Two-screenshot output per pin: `NN.viewport.png` (full viewport with overlay rendered) and `NN.element.png` (clean crop with 24px padding, taken with the overlay temporarily hidden).
+- `chrome.tabs.captureVisibleTab` for the viewport pass; off-screen canvas for the element crop.
+- Comment popup anchored to the picked element, with optional Web Speech API voice memo.
+- React Fiber introspection: component name, owner chain (depth ≤ 5), `_debugSource` when available, sanitized props (depth ≤ 2, no functions, truncated strings).
+- Console buffer (last 60 s) and optional network-failure capture.
+- Computed-styles subset (layout, typography, box, visual) bundled into the JSON payload.
+
+#### File output
+
+- `<vault>/<domain>/<session>/NN.{md,json,viewport.png,element.png}`.
+- Per-session `README.md` index regenerated on every write.
+- Session folders named `YYYYMMDD-HHMM__<slug>_<id>` for natural sort and disambiguation.
+- Filesystem-illegal characters in session names are sanitized.
+- Schema versioned at `2`, documented in `docs/file-schema.md`.
+
+#### Vault management
+
+- File System Access API with the directory handle persisted in IndexedDB.
+- Periodic health check (write-then-read of `.dompin-health`) detects when the folder is moved or deleted; the side panel surfaces an unreachable banner with reconnect / pick-a-new-folder actions.
+- Permission re-grant flow when Chrome expires the directory access.
+
+#### Other
 
 - Manifest V3 Chrome extension built with Vite + `@crxjs/vite-plugin`.
-- Element picker with hover overlay (DevTools-style highlight, selector + dimensions tooltip), debounced and crosshair-cursor.
-- Drag-region picker (Shift-drag) for non-element annotations.
-- Robust unique-selector algorithm with `data-testid` / `data-test` / `id` / `aria-label` / class / nth-of-type fallback, generated-class heuristics, and uniqueness validation.
-- Comment popup anchored to the picked element, with optional Web Speech API voice memo.
-- Persistent annotation queue in `chrome.storage.local`, restored on service worker restart.
-- Per-page annotation markers (clickable to remove), updated on SPA navigation.
-- Toolbar popup (React) with connection status, queue summary, and "send to server" / "clear" / "toggle picker" actions.
-- Options page (React) for WebSocket host/port/path, domain allowlist (`*` and `*.example.com` patterns), and feature toggles (network failures, Web Speech API, React Fiber introspection).
-- Hotkey: `Cmd+Shift+.` (macOS) / `Ctrl+Shift+.` (Windows / Linux).
-- Background service worker: WebSocket client with exponential-backoff reconnect, heartbeat, hello/welcome handshake, viewport screenshot via `captureVisibleTab`, element-zoned screenshot crop with offscreen canvas.
-- Bidirectional commands: `highlight` (pulsating outline) and `scrollTo` (smooth scroll into view) driven from the agent.
-- Console buffer (last 60 s) and optional network-failure capture.
-- React Fiber introspection: component name, owner chain (depth ≤ 5), `_debugSource` when in dev builds, sanitized props (depth ≤ 2, no functions, truncated strings).
 - Shadow-DOM-isolated overlay; light / dark color-scheme aware.
 - Self-generated icon set (16 / 32 / 48 / 128).
-
-#### Server (`@dompin/server`)
-
-- MCP server over stdio, plus a WebSocket bridge on `127.0.0.1:8930/dompin`.
-- Seven tools: `list_pinned_annotations`, `get_annotation`, `consume_annotation`, `clear_pinned`, `highlight_element`, `scroll_to_element`, `server_status`.
-- `get_annotation` returns image content blocks for screenshots when possible.
-- Strict zod validation of all extension messages with `INVALID_PAYLOAD` errors that never crash the process.
-- Major-version protocol check with `PROTOCOL_MISMATCH` close.
-- One active extension client at a time; new connections cleanly replace the previous one.
-- 30 s server-side ping with 60 s pong-loss timeout.
-- CLI: `--host`, `--port`, `--no-ws`, `--help`, `--version`. Env: `DOMPIN_HOST`, `DOMPIN_PORT`, `DOMPIN_DEBUG`.
-- Logging exclusively on stderr (stdout reserved for MCP transport).
-- 23-check end-to-end smoke test exercising MCP and WebSocket together.
-
-#### Shared (`@dompin/shared`)
-
-- Protocol types: `AnnotationPayload`, `ExtensionMessage`, `ServerMessage`, `ServerStatus`, summaries.
-- Constants: `PROTOCOL_VERSION`, default WS host / port / path.
-- `buildWsUrl` helper and message-type guards.
+- Allowlist with `*` and `*.example.com` patterns.
+- Demo app under `examples/demo-app/` for manual picker QA.
 
 #### Tooling
 
-- pnpm monorepo with three workspace packages.
+- pnpm monorepo (single workspace package: `@dompin/extension`).
 - Strict TypeScript (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`, etc.).
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
-- Demo app under `examples/demo-app/` for manual picker QA.
 
-[Unreleased]: https://github.com/YosephFr/dompin/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/YosephFr/dompin/releases/tag/v0.1.0

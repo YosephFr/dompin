@@ -4,7 +4,7 @@
   "private": true,
   "description": "Pin elements on any web page and write annotated DOM context, screenshots, and component info to a local folder for your AI coding agent.",
   "license": "MIT",
-  "author": "Yoseph Franco <yosephfr@icloud.com>",
+  "author": "Yoseph Franco <YosephFr@users.noreply.github.com>",
   "homepage": "https://github.com/YosephFr/dompin#readme",
   "repository": {
     "type": "git",

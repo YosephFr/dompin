@@ -4,7 +4,7 @@
   "private": true,
   "description": "Chrome extension for pinning and annotating page elements; writes annotations to a local folder you choose.",
   "license": "MIT",
-  "author": "Yoseph Franco <yosephfr@icloud.com>",
+  "author": "Yoseph Franco <YosephFr@users.noreply.github.com>",
   "homepage": "https://github.com/YosephFr/dompin#readme",
   "repository": {
     "type": "git",

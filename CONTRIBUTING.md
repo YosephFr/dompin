@@ -24,7 +24,7 @@ pnpm typecheck
 pnpm --filter @dompin/extension dev
 ```
 
-Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions`. Open the extension's options page once to pick a vault folder before exercising the picker.
+Then load `packages/extension/dist` as an unpacked extension at `chrome://extensions`. Click the DOMPin icon to open the side panel — the wizard walks you through picking a vault folder before you start a session and exercise the picker.
 
 ## Code style
 

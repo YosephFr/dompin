@@ -31,32 +31,45 @@ The first time the extension loads, it opens the bundled demo page and the side 
 
 ## 3. Pick your vault folder
 
-1. Click the DOMPin icon. The side panel opens with a welcome card and a **Choose folder…** button.
-2. Pick any directory on your machine. A dedicated folder you can later open in your editor is recommended.
+1. Click the DOMPin icon. The side panel opens with the welcome wizard.
+2. In step 1 of the wizard, click **Choose folder…** and pick any directory on your machine. A dedicated folder you can later open in your editor is recommended.
 3. Chrome will ask once for read-write permission to that folder. Approve it.
 
 The extension stores the folder handle locally. It does not see anything outside that folder.
 
-## 4. Optional: bind a keyboard shortcut
+You can change the vault folder at any time by clicking the pencil icon next to **Vault: …** at the bottom of the side panel.
 
-The default shortcut for toggling the picker is `Cmd+Shift+.` on macOS and `Ctrl+Shift+.` elsewhere. To change it or assign one:
+## 4. Start a session
+
+DOMPin scopes annotations to named sessions, one per browser tab.
+
+1. With the side panel open, click **Start new session** in the Session card.
+2. Type a name (or leave it blank for an auto-generated slug) and press Enter.
+3. The picker arms automatically once the session is active.
+
+## 5. Pin elements
+
+You have three ways to capture an element:
+
+- **Sticky picker**: click **Start picking** in the side panel. The picker stays on across multiple pins until you stop it. Best for a focused review of several elements in a row.
+- **Keyboard shortcut**: press `Cmd+Shift+.` (Mac) or `Ctrl+Shift+.` (Win/Linux). The picker enters one-shot mode, captures a single element, and auto-stops.
+- **Right-click**: choose **Annotate element with DOMPin** from the browser's native right-click menu on any element. The comment popup opens for that exact element without dismissing modals, popovers, or dropdowns.
+
+Hover over an element, click to anchor it, type a comment, press Enter. A new domain subfolder and a session subfolder will appear in your vault folder with `01.md`, `01.element.png`, `01.viewport.png`, and `01.json`.
+
+## Optional: change the keyboard shortcut
+
+To rebind the one-shot picker shortcut:
 
 1. Open `chrome://extensions/shortcuts`.
 2. Find **DOMPin → Toggle the DOMPin element picker** and assign your preferred chord.
-
-## 5. Verify
-
-1. Open any web page.
-2. Click the DOMPin icon. The side panel opens. Click **Resume picker** (or press your shortcut) to enter pick mode.
-3. Hover over an element, click to anchor it, type a comment, press Enter.
-4. Open the vault folder you picked. A new domain subfolder and a session subfolder should contain the annotation files.
-
-You can also right-click any element on a page and choose **Annotate element with DOMPin** — this opens the comment popup for that element without dismissing modals or popovers, which is invaluable when capturing transient UI.
 
 ## Reconnecting after a browser restart
 
 Chrome may ask you to reauthorize folder access after a restart or after long periods of inactivity. The side panel shows a **Reconnect folder** banner when this happens. Click it once and access is restored.
 
+If you move or delete the vault folder, DOMPin detects it on the next health check and shows an **unreachable** banner with **Pick a new folder** and **Try reconnect** actions.
+
 ## Allowed domains
 
-By default, the picker is enabled on every site. To restrict it, open the options page (gear icon in the side panel, or right-click the extension icon → **Options**) and edit the **Allowed domains** list. Use one entry per line; `*.example.com` matches every subdomain.
+By default, the picker is enabled on every site. To restrict it, open the options page from the side panel's overflow menu (⋯ → **Open settings**) and edit the **Allowed domains** list. Use one entry per line; `*.example.com` matches every subdomain.
