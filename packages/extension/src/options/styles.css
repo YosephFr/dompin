@@ -9,10 +9,8 @@
   --accent-soft: rgba(10, 132, 255, 0.12);
   --ok: #1f9d55;
   --err: #d8404a;
-  --font-ui:
-    'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable Text', 'Segoe UI Variable Display',
-    -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,7 +40,7 @@ body {
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 #root {
@@ -58,7 +56,7 @@ body {
   padding: 56px 36px 80px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
 }
 
 .loading {
@@ -71,7 +69,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -96,13 +94,6 @@ body {
   letter-spacing: -0.02em;
 }
 
-.subtitle {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13.5px;
-  max-width: 56ch;
-}
-
 .section {
   display: flex;
   flex-direction: column;
@@ -111,6 +102,13 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .section h2 {
@@ -125,6 +123,12 @@ body {
   margin: -4px 0 0;
   color: var(--muted);
   font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.section-hint.quiet {
+  font-size: 12px;
+  margin-top: 6px;
 }
 
 .section-hint code {
@@ -136,53 +140,65 @@ body {
   border-radius: 4px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1.5fr;
-  gap: 12px;
+.wizard {
+  gap: 16px;
 }
 
-.field {
+.wizard-list {
+  margin: 0;
+  padding-left: 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--fg);
 }
 
-.field-label {
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.wizard-list li::marker {
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.field input {
-  appearance: none;
+.wizard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vault-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
-  color: var(--fg);
-  padding: 8px 10px;
+}
+
+.vault-name {
   font-family: var(--font-mono);
   font-size: 13px;
-  outline: none;
-  transition:
-    border-color 120ms,
-    box-shadow 120ms;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
 }
 
-.field input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.vault-stats {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.field-error input {
-  border-color: var(--err);
-}
-
-.field-message {
-  font-size: 11.5px;
-  color: var(--err);
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .textarea {
@@ -207,20 +223,15 @@ body {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .toggle {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 16px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--border);
   cursor: pointer;
+  position: relative;
 }
 
 .toggle:first-of-type {
@@ -244,6 +255,7 @@ body {
   font-size: 12px;
   color: var(--muted);
   max-width: 60ch;
+  line-height: 1.45;
 }
 
 .toggle-input {
@@ -300,6 +312,7 @@ body {
   transition:
     background 120ms,
     color 120ms,
+    border-color 120ms,
     transform 80ms;
   letter-spacing: 0.01em;
 }
@@ -340,7 +353,7 @@ body {
 
 .btn-ghost:not(:disabled):hover {
   color: var(--fg);
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .status-ok {
@@ -359,11 +372,19 @@ body {
   text-overflow: ellipsis;
 }
 
+.inline-error {
+  white-space: normal;
+  max-width: 60ch;
+  background: color-mix(in srgb, var(--err) 10%, transparent);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
 .page-footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-top: 8px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 
