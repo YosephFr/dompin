@@ -2,8 +2,6 @@ export interface Settings {
   schemaVersion: 2;
   allowlist: string[];
   flags: {
-    captureViewportScreenshot: boolean;
-    captureZonedScreenshot: boolean;
     captureNetworkFailures: boolean;
     enableWebSpeech: boolean;
     enableReactFiber: boolean;
@@ -15,8 +13,6 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 2,
   allowlist: ['*'],
   flags: {
-    captureViewportScreenshot: true,
-    captureZonedScreenshot: true,
     captureNetworkFailures: false,
     enableWebSpeech: true,
     enableReactFiber: true,

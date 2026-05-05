@@ -22,39 +22,59 @@ export interface PinInputRegion {
 
 export type PinInput = PinInputElement | PinInputRegion;
 
+export interface CaptureOverlay {
+  showHighlight(el: Element): void;
+  hideHighlight(): void;
+  showProvisional(ord: number, rect: RectInfo): void;
+  hideProvisional(): void;
+  withOverlayHidden<T>(fn: () => Promise<T>): Promise<T>;
+}
+
 export async function buildAnnotation(
   input: PinInput,
   settings: Settings,
+  overlay: CaptureOverlay,
+  provisionalOrdinal: number,
 ): Promise<AnnotationPayload> {
   const page = capturePage();
   const dpr = page.viewport.devicePixelRatio;
   let elementCtx = null;
   let regionCtx = null;
-  let zonedRect: RectInfo | null = null;
+  let rect: RectInfo | null = null;
 
   if (input.kind === 'element') {
     elementCtx = captureElement(input.element, {
       enableReactFiber: settings.flags.enableReactFiber,
     });
-    zonedRect = elementCtx.boundingRect;
+    rect = elementCtx.boundingRect;
+    overlay.showHighlight(input.element);
   } else {
     regionCtx = { rect: input.rect };
-    zonedRect = input.rect;
+    rect = input.rect;
   }
 
-  const viewportPromise = sendRequest<{ dataUrl: string }>({ kind: 'capture-viewport' });
-  const zonedPromise = zonedRect
-    ? sendRequest<{ dataUrl: string }>({
-        kind: 'capture-zoned',
-        rect: zonedRect,
-        dpr,
-        padding: 16,
-      })
-    : Promise.resolve({ ok: false as const, error: 'no rect' });
+  if (rect) overlay.showProvisional(provisionalOrdinal, rect);
 
-  const [viewportResp, zonedResp] = await Promise.all([viewportPromise, zonedPromise]);
+  await waitTwoFrames();
+
+  const viewportResp = await sendRequest<{ dataUrl: string }>({ kind: 'capture-viewport' });
   const viewportShot = viewportResp.ok ? viewportResp.dataUrl : '';
-  const zonedShot = zonedResp.ok ? zonedResp.dataUrl : null;
+
+  let elementShot: string | null = null;
+  if (rect) {
+    const targetRect = rect;
+    const elemResp = await overlay.withOverlayHidden(() =>
+      sendRequest<{ dataUrl: string }>({
+        kind: 'capture-element',
+        rect: targetRect,
+        dpr,
+        padding: 24,
+      }),
+    );
+    elementShot = elemResp.ok ? elemResp.dataUrl : null;
+  }
+
+  overlay.hideProvisional();
 
   const payload: AnnotationPayload = {
     id: newId(),
@@ -63,11 +83,17 @@ export async function buildAnnotation(
     element: elementCtx,
     region: regionCtx,
     comment: input.comment.trim(),
-    screenshots: { viewport: viewportShot, zoned: zonedShot },
+    screenshots: { viewport: viewportShot, element: elementShot },
     console: snapshotConsole(),
   };
   if (input.voiceTranscript && input.voiceTranscript.trim().length > 0) {
     payload.voiceTranscript = input.voiceTranscript.trim();
   }
   return payload;
+}
+
+function waitTwoFrames(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }

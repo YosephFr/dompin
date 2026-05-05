@@ -27,9 +27,11 @@ export type RequestMessage =
   | { kind: 'session:archive'; sessionId: string }
   | { kind: 'annotation:add'; payload: AnnotationPayload }
   | { kind: 'annotation:cancel'; annotationId: string }
+  | { kind: 'annotation:edit-comment'; annotationId: string; comment: string }
   | { kind: 'capture-viewport' }
-  | { kind: 'capture-zoned'; rect: RectInfo; dpr: number; padding?: number }
-  | { kind: 'pins:for-tab' }
+  | { kind: 'capture-viewport-clean' }
+  | { kind: 'capture-element'; rect: RectInfo; dpr: number; padding?: number }
+  | { kind: 'pins:for-tab'; tabId?: number }
   | { kind: 'toggle-picker' }
   | { kind: 'settings:save'; settings: Settings };
 
@@ -55,6 +57,7 @@ export type TabCommand =
   | { kind: 'picker:toggle' }
   | { kind: 'picker:open' }
   | { kind: 'picker:close' }
+  | { kind: 'annotate:context' }
   | { kind: 'pins:update' };
 
 export function sendRequest<T extends object = Record<string, never>>(

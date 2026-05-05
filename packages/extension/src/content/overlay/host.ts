@@ -53,3 +53,22 @@ export function teardownOverlay(): void {
   cached.shadowRoot.host.remove();
   cached = null;
 }
+
+export async function withOverlayHidden<T>(fn: () => Promise<T>): Promise<T> {
+  if (!cached) return fn();
+  const host = cached.shadowRoot.host as HTMLElement;
+  const prev = host.style.visibility;
+  host.style.visibility = 'hidden';
+  try {
+    await waitTwoFrames();
+    return await fn();
+  } finally {
+    host.style.visibility = prev;
+  }
+}
+
+function waitTwoFrames(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}

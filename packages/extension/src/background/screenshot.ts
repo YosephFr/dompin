@@ -60,11 +60,11 @@ export async function cropDataUrl(
   }
 }
 
-export async function captureZoned(
+export async function captureElement(
   tabId: number,
   rect: RectInfo,
   dpr: number,
-  padding = 16,
+  padding = 24,
 ): Promise<string> {
   const viewport = await captureViewport(tabId);
   return cropDataUrl(viewport, rect, dpr, padding);

@@ -37,24 +37,24 @@ export async function writeAnnotation(
     const files: WrittenFile[] = [];
 
     const viewportName = payload.screenshots.viewport ? `${base}.viewport.png` : null;
-    const zonedName = payload.screenshots.zoned ? `${base}.png` : null;
+    const elementName = payload.screenshots.element ? `${base}.element.png` : null;
 
     if (viewportName) {
       const bytes = await writeBlob(dir, viewportName, payload.screenshots.viewport);
       files.push({ relativePath: relPath(session, viewportName), bytes });
     }
-    if (zonedName && payload.screenshots.zoned) {
-      const bytes = await writeBlob(dir, zonedName, payload.screenshots.zoned);
-      files.push({ relativePath: relPath(session, zonedName), bytes });
+    if (elementName && payload.screenshots.element) {
+      const bytes = await writeBlob(dir, elementName, payload.screenshots.element);
+      files.push({ relativePath: relPath(session, elementName), bytes });
     }
 
     const jsonName = `${base}.json`;
-    const jsonStr = serializePayloadJson(session, payload, ordinal, viewportName, zonedName);
+    const jsonStr = serializePayloadJson(session, payload, ordinal, viewportName, elementName);
     const jsonBytes = await writeText(dir, jsonName, jsonStr);
     files.push({ relativePath: relPath(session, jsonName), bytes: jsonBytes });
 
     const mdName = `${base}.md`;
-    const md = renderAnnotationMarkdown(session, payload, ordinal, viewportName, zonedName);
+    const md = renderAnnotationMarkdown(session, payload, ordinal, viewportName, elementName);
     const mdBytes = await writeText(dir, mdName, md);
     files.push({ relativePath: relPath(session, mdName), bytes: mdBytes });
 
@@ -74,13 +74,67 @@ export async function deleteAnnotation(
       const entry = entries.find((e) => e.id === annotationId);
       if (!entry) return { ok: false as const, error: 'Annotation not found' };
       const base = annotationFileBase(entry.ordinal);
-      for (const name of [`${base}.md`, `${base}.json`, `${base}.png`, `${base}.viewport.png`]) {
+      for (const name of [
+        `${base}.md`,
+        `${base}.json`,
+        `${base}.element.png`,
+        `${base}.viewport.png`,
+      ]) {
         await safeRemove(dir, name);
       }
       await regenerateSessionReadmeFromDir(session, dir);
       return { ok: true as const };
     } catch (e) {
       log.warn('deleteAnnotation', e);
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+}
+
+export async function editAnnotationComment(
+  session: Session,
+  annotationId: string,
+  newComment: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return serialize(async () => {
+    try {
+      const dir = await getSessionDir(session, false);
+      const entries = await readSessionIndex(dir);
+      const entry = entries.find((e) => e.id === annotationId);
+      if (!entry) return { ok: false as const, error: 'Annotation not found' };
+      const base = annotationFileBase(entry.ordinal);
+      const jsonHandle = await dir.getFileHandle(`${base}.json`).catch(() => null);
+      if (!jsonHandle) return { ok: false as const, error: 'Annotation JSON missing' };
+      const file = await jsonHandle.getFile();
+      const text = await file.text();
+      const json = JSON.parse(text) as Record<string, unknown>;
+      const trimmed = newComment.trim();
+      json['comment'] = trimmed;
+      const meta = (json['meta'] ?? {}) as Record<string, unknown>;
+      meta['editedAt'] = Date.now();
+      json['meta'] = meta;
+      await writeText(dir, `${base}.json`, JSON.stringify(json, null, 2));
+
+      const screenshots = (json['screenshots'] ?? {}) as Record<string, unknown>;
+      const viewportRel = String(screenshots['viewport'] ?? '');
+      const elementRel = (screenshots['element'] ?? null) as string | null;
+      const viewportFile = viewportRel ? viewportRel.replace(/^\.\//, '') : null;
+      const elementFile = elementRel ? String(elementRel).replace(/^\.\//, '') : null;
+
+      const payload = jsonToAnnotationPayload(json);
+      const md = renderAnnotationMarkdown(
+        session,
+        payload,
+        entry.ordinal,
+        viewportFile,
+        elementFile,
+      );
+      await writeText(dir, `${base}.md`, md);
+
+      await regenerateSessionReadmeFromDir(session, dir);
+      return { ok: true as const };
+    } catch (e) {
+      log.warn('editAnnotationComment', e);
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
     }
   });
@@ -248,6 +302,31 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
   };
 }
 
+function jsonToAnnotationPayload(json: Record<string, unknown>): AnnotationPayload {
+  const screenshots = (json['screenshots'] ?? {}) as Record<string, unknown>;
+  return {
+    id: String(json['id'] ?? ''),
+    createdAt: Number(json['createdAt'] ?? Date.now()),
+    page: (json['page'] ?? {}) as AnnotationPayload['page'],
+    element: (json['element'] ?? null) as AnnotationPayload['element'],
+    region: (json['region'] ?? null) as AnnotationPayload['region'],
+    comment: String(json['comment'] ?? ''),
+    voiceTranscript:
+      typeof json['voiceTranscript'] === 'string' ? (json['voiceTranscript'] as string) : undefined,
+    screenshots: {
+      viewport: String(screenshots['viewport'] ?? ''),
+      element:
+        typeof screenshots['element'] === 'string' ? (screenshots['element'] as string) : null,
+    },
+    console: Array.isArray(json['console'])
+      ? (json['console'] as AnnotationPayload['console'])
+      : [],
+    network: Array.isArray(json['network'])
+      ? (json['network'] as AnnotationPayload['network'])
+      : undefined,
+  };
+}
+
 function previewComment(s: string): string {
   const t = s.replace(/\s+/g, ' ').trim();
   return t.length > 80 ? `${t.slice(0, 77)}...` : t;
@@ -258,7 +337,7 @@ function serializePayloadJson(
   payload: AnnotationPayload,
   ordinal: number,
   viewportFile: string | null,
-  zonedFile: string | null,
+  elementFile: string | null,
 ): string {
   const meta = {
     sessionId: session.id,
@@ -271,7 +350,7 @@ function serializePayloadJson(
     ...payload,
     screenshots: {
       viewport: viewportFile ? `./${viewportFile}` : '',
-      zoned: zonedFile ? `./${zonedFile}` : null,
+      element: elementFile ? `./${elementFile}` : null,
     },
   };
   return JSON.stringify({ meta, ...trimmed }, null, 2);
@@ -282,7 +361,7 @@ function renderAnnotationMarkdown(
   payload: AnnotationPayload,
   ordinal: number,
   viewportFile: string | null,
-  zonedFile: string | null,
+  elementFile: string | null,
 ): string {
   const ts = new Date(payload.createdAt).toISOString();
   const lines: string[] = [];
@@ -309,6 +388,7 @@ function renderAnnotationMarkdown(
     lines.push(payload.voiceTranscript.trim());
     lines.push('');
   }
+  appendScreenshotsSection(lines, viewportFile, elementFile);
   if (payload.element) {
     appendElementSection(lines, payload.element);
   } else if (payload.region) {
@@ -317,7 +397,6 @@ function renderAnnotationMarkdown(
   if (payload.element?.computedStyles) {
     appendComputedStyles(lines, payload.element.computedStyles);
   }
-  appendScreenshotsSection(lines, viewportFile, zonedFile);
   appendConsoleSection(lines, payload.console);
   appendNetworkSection(lines, payload.network);
   return lines.join('\n');
@@ -371,41 +450,37 @@ function appendComputedStyles(
   lines: string[],
   cs: NonNullable<AnnotationPayload['element']>['computedStyles'],
 ): void {
-  const sections: Array<[string, Record<string, string>]> = [
-    ['Layout', cs.layout],
-    ['Typography', cs.typography],
-    ['Box', cs.box],
-    ['Visual', cs.visual],
-  ];
-  let printedHeader = false;
-  for (const [title, styles] of sections) {
-    const keys = Object.keys(styles);
-    if (!keys.length) continue;
-    if (!printedHeader) {
-      lines.push('## Computed styles');
-      lines.push('');
-      printedHeader = true;
-    }
-    lines.push(`### ${title}`);
-    lines.push('');
-    for (const key of keys) {
-      lines.push(`- \`${key}\`: \`${styles[key] ?? ''}\``);
-    }
-    lines.push('');
+  const all: Record<string, string> = { ...cs.layout, ...cs.typography, ...cs.box, ...cs.visual };
+  const keys = Object.keys(all);
+  if (!keys.length) return;
+  lines.push('## Computed styles');
+  lines.push('');
+  for (const key of keys) {
+    lines.push(`- \`${key}\`: \`${all[key] ?? ''}\``);
   }
+  lines.push('');
 }
 
 function appendScreenshotsSection(
   lines: string[],
   viewportFile: string | null,
-  zonedFile: string | null,
+  elementFile: string | null,
 ): void {
-  if (!viewportFile && !zonedFile) return;
+  if (!viewportFile && !elementFile) return;
   lines.push('## Screenshots');
   lines.push('');
-  if (zonedFile) lines.push(`- ![zoned](./${zonedFile}) — element zone with outline + padding`);
-  if (viewportFile) lines.push(`- ![viewport](./${viewportFile}) — full viewport`);
-  lines.push('');
+  if (viewportFile) {
+    lines.push(`![viewport](./${viewportFile})`);
+    lines.push('');
+    lines.push('_Viewport with markers, highlight, and element infobox._');
+    lines.push('');
+  }
+  if (elementFile) {
+    lines.push(`![element](./${elementFile})`);
+    lines.push('');
+    lines.push('_Clean crop of the pinned element._');
+    lines.push('');
+  }
 }
 
 function appendConsoleSection(lines: string[], entries: AnnotationPayload['console']): void {

@@ -5,13 +5,18 @@ import { isOriginAllowed, type Settings } from '../common/settings.js';
 import { loadSettings, onSettingsChange } from '../common/storage.js';
 import { createLogger } from '../common/logger.js';
 import { installConsoleBuffer } from './console-buffer.js';
-import { ensureOverlay, teardownOverlay, type OverlayHandles } from './overlay/host.js';
+import {
+  ensureOverlay,
+  teardownOverlay,
+  withOverlayHidden,
+  type OverlayHandles,
+} from './overlay/host.js';
 import { Highlight } from './overlay/highlight.js';
 import { RegionRect } from './overlay/region-rect.js';
 import { MarkerManager } from './overlay/markers.js';
 import { CommentPopup } from './overlay/comment-popup.js';
 import { Picker } from './picker/element-picker.js';
-import { buildAnnotation } from './capture/index.js';
+import { buildAnnotation, type CaptureOverlay } from './capture/index.js';
 import { uniqueSelector } from './capture/selector.js';
 
 const log = createLogger('content');
@@ -26,6 +31,7 @@ class ContentApp {
   private picker: Picker;
   private currentUrl: string;
   private active = true;
+  private lastRightClickedEl: Element | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -46,6 +52,7 @@ class ContentApp {
     this.setupTabMessageListener();
     this.setupSettingsListener();
     this.setupUrlChangeListener();
+    this.setupContextMenuTracker();
     void this.refreshMarkers();
   }
 
@@ -70,6 +77,16 @@ class ContentApp {
     if (r.ok) this.markers.update(r.pins);
   }
 
+  private captureOverlay(): CaptureOverlay {
+    return {
+      showHighlight: (el) => this.highlight.show(el),
+      hideHighlight: () => this.highlight.hide(),
+      showProvisional: (ord, rect) => this.markers.showProvisional(ord, rect),
+      hideProvisional: () => this.markers.hideProvisional(),
+      withOverlayHidden: (fn) => withOverlayHidden(fn),
+    };
+  }
+
   private handlePickElement(el: Element): void {
     this.picker.stop();
     const rect = el.getBoundingClientRect();
@@ -80,22 +97,10 @@ class ContentApp {
       selectorPreview,
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
-        try {
-          const payload = await buildAnnotation(
-            { kind: 'element', element: el, comment, voiceTranscript },
-            this.settings,
-          );
-          const resp = await sendRequest({ kind: 'annotation:add', payload });
-          if (!resp.ok) {
-            log.warn('annotation add failed', resp.error);
-          }
-          await this.refreshMarkers();
-        } catch (e) {
-          log.error('build annotation failed', e);
-        }
+        await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
       },
       onCancel: () => {
-        /* noop */
+        this.highlight.hide();
       },
     });
   }
@@ -107,20 +112,54 @@ class ContentApp {
       selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
-        try {
-          const payload = await buildAnnotation(
-            { kind: 'region', rect, comment, voiceTranscript },
-            this.settings,
-          );
-          const resp = await sendRequest({ kind: 'annotation:add', payload });
-          if (!resp.ok) log.warn('annotation add failed', resp.error);
-          await this.refreshMarkers();
-        } catch (e) {
-          log.error('build annotation failed', e);
-        }
+        await this.runCapture({ kind: 'region', rect, comment, voiceTranscript }, rect);
       },
       onCancel: () => {
         /* noop */
+      },
+    });
+  }
+
+  private async runCapture(
+    input: Parameters<typeof buildAnnotation>[0],
+    targetRect: RectInfo | DOMRect,
+  ): Promise<void> {
+    const provisionalOrd = this.markers.count() + 1;
+    const overlay = this.captureOverlay();
+    if (input.kind === 'element') {
+      overlay.showHighlight(input.element);
+    }
+    overlay.showProvisional(provisionalOrd, toRectInfo(targetRect));
+    try {
+      const payload = await buildAnnotation(input, this.settings, overlay, provisionalOrd);
+      const resp = await sendRequest({ kind: 'annotation:add', payload });
+      if (!resp.ok) log.warn('annotation add failed', resp.error);
+      await this.refreshMarkers();
+    } catch (e) {
+      log.error('capture failed', e);
+    } finally {
+      overlay.hideProvisional();
+      this.highlight.hide();
+    }
+  }
+
+  private handleAnnotateContext(): void {
+    if (!this.lastRightClickedEl) return;
+    const el = this.lastRightClickedEl;
+    if (!el.isConnected) return;
+    if (this.isOurDom(el)) return;
+    const rect = el.getBoundingClientRect();
+    const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    const selectorPreview = previewSelector(el);
+    this.popup.open({
+      anchorRect,
+      selectorPreview,
+      enableSpeech: this.settings.flags.enableWebSpeech,
+      onConfirm: async ({ comment, voiceTranscript }) => {
+        await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
+      },
+      onCancel: () => {
+        this.highlight.hide();
       },
     });
   }
@@ -157,6 +196,10 @@ class ContentApp {
           if (this.picker.isActive()) this.picker.stop();
           sendResponse({ ok: true });
           return false;
+        case 'annotate:context':
+          this.handleAnnotateContext();
+          sendResponse({ ok: true });
+          return false;
         case 'pins:update':
           void this.refreshMarkers();
           sendResponse({ ok: true });
@@ -175,6 +218,20 @@ class ContentApp {
         this.shutdown();
       }
     });
+  }
+
+  private setupContextMenuTracker(): void {
+    document.addEventListener(
+      'contextmenu',
+      (ev) => {
+        const target = ev.target;
+        if (target instanceof Element) {
+          if (this.isOurDom(target)) return;
+          this.lastRightClickedEl = target;
+        }
+      },
+      true,
+    );
   }
 
   private setupUrlChangeListener(): void {
@@ -222,6 +279,10 @@ function previewSelector(el: Element): string {
   } catch {
     return el.tagName.toLowerCase();
   }
+}
+
+function toRectInfo(r: RectInfo | DOMRect): RectInfo {
+  return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
 
 async function bootstrap(): Promise<void> {

@@ -127,6 +127,20 @@ export const OVERLAY_CSS = `
 
 .dp-marker:hover { transform: scale(1.12); }
 
+.dp-marker.is-provisional {
+  background: var(--dp-accent);
+  box-shadow:
+    0 0 0 3px var(--dp-paper),
+    0 0 0 5px var(--dp-accent),
+    0 4px 14px rgba(10,132,255,0.55);
+  animation: dp-marker-prov 1.2s ease-in-out infinite;
+}
+
+@keyframes dp-marker-prov {
+  0%, 100% { transform: translate(var(--mx,0), var(--my,0)) scale(1); }
+  50% { transform: translate(var(--mx,0), var(--my,0)) scale(1.08); }
+}
+
 .dp-popup {
   position: fixed;
   pointer-events: auto;

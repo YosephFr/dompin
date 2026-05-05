@@ -17,12 +17,13 @@ import {
 } from './session.js';
 import {
   deleteAnnotation,
+  editAnnotationComment,
   readSessionPins,
   regenerateSessionReadme,
   writeAnnotation,
 } from './vault-writer.js';
 import { sendTabCommand } from './tab-bridge.js';
-import { captureViewport, captureZoned } from './screenshot.js';
+import { captureElement, captureViewport } from './screenshot.js';
 
 const log = createLogger('router');
 
@@ -136,7 +137,15 @@ async function handle(
       await bumpSessionAnnotation(session.id, -1);
       return ok({});
     }
-    case 'capture-viewport': {
+    case 'annotation:edit-comment': {
+      const session = await findSessionForCancel(sender, req.annotationId);
+      if (!session) return err('Annotation not found in any active session');
+      const result = await editAnnotationComment(session, req.annotationId, req.comment);
+      if (!result.ok) return err(result.error);
+      return ok({});
+    }
+    case 'capture-viewport':
+    case 'capture-viewport-clean': {
       const tabId = sender.tab?.id;
       if (typeof tabId !== 'number') return err('capture-viewport requires a tab sender');
       try {
@@ -146,19 +155,19 @@ async function handle(
         return err(e instanceof Error ? e.message : String(e));
       }
     }
-    case 'capture-zoned': {
+    case 'capture-element': {
       const tabId = sender.tab?.id;
-      if (typeof tabId !== 'number') return err('capture-zoned requires a tab sender');
+      if (typeof tabId !== 'number') return err('capture-element requires a tab sender');
       try {
-        const dataUrl = await captureZoned(tabId, req.rect, req.dpr, req.padding);
+        const dataUrl = await captureElement(tabId, req.rect, req.dpr, req.padding);
         return ok({ dataUrl });
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
       }
     }
     case 'pins:for-tab': {
-      const tabId = sender.tab?.id;
-      if (typeof tabId !== 'number') return ok({ pins: [] });
+      const tabId = await resolveTabId(req.tabId, sender);
+      if (tabId == null) return ok({ pins: [] });
       const session = await getActiveSession(tabId);
       if (!session) return ok({ pins: [] });
       const pins = await readSessionPins(session);

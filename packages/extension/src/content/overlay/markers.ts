@@ -13,6 +13,8 @@ export class MarkerManager {
   private markers = new Map<string, MarkerEntry>();
   private rafId: number | null = null;
   private pending: PinForPage[] = [];
+  private provisional: HTMLElement | null = null;
+  private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
 
   constructor(
     private layer: HTMLElement,
@@ -20,6 +22,44 @@ export class MarkerManager {
   ) {
     addEventListener('scroll', this.onScrollResize, true);
     addEventListener('resize', this.onScrollResize);
+  }
+
+  count(): number {
+    return this.markers.size;
+  }
+
+  showProvisional(
+    ord: number,
+    rect: { x: number; y: number; width: number; height: number },
+  ): void {
+    if (!this.provisional) {
+      const el = document.createElement('div');
+      el.className = 'dp-marker is-provisional';
+      this.layer.appendChild(el);
+      this.provisional = el;
+    }
+    this.provisional.textContent = String(ord);
+    this.provisionalRect = rect;
+    this.renderProvisional();
+  }
+
+  hideProvisional(): void {
+    if (this.provisional) {
+      this.provisional.remove();
+      this.provisional = null;
+    }
+    this.provisionalRect = null;
+  }
+
+  private renderProvisional(): void {
+    if (!this.provisional || !this.provisionalRect) return;
+    const r = this.provisionalRect;
+    const x = r.x + r.width - 14;
+    const y = r.y - 8;
+    this.provisional.style.left = '0';
+    this.provisional.style.top = '0';
+    this.provisional.style.transform = `translate(${x}px, ${y}px)`;
+    this.provisional.style.display = 'flex';
   }
 
   update(pins: PinForPage[]): void {

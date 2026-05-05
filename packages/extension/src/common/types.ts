@@ -81,7 +81,7 @@ export interface ReactSource {
 
 export interface ScreenshotSet {
   viewport: string;
-  zoned: string | null;
+  element: string | null;
 }
 
 export interface ConsoleEntry {
