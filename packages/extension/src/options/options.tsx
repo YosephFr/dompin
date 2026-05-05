@@ -1,6 +1,8 @@
 import { createRoot } from 'react-dom/client';
-
-const App = () => <div>DOMPin Options</div>;
+import { App } from './App.js';
+import './styles.css';
 
 const root = document.getElementById('root');
-if (root) createRoot(root).render(<App />);
+if (root) {
+  createRoot(root).render(<App />);
+}

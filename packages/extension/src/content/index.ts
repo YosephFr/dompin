@@ -1,1 +1,284 @@
-export {};
+import type { RectInfo } from '@dompin/shared';
+import type { TabCommand } from '../common/messaging.js';
+import { sendRequest } from '../common/messaging.js';
+import { isOriginAllowed, type Settings } from '../common/settings.js';
+import { loadSettings, onSettingsChange } from '../common/storage.js';
+import { createLogger } from '../common/logger.js';
+import { installConsoleBuffer } from './console-buffer.js';
+import { ensureOverlay, teardownOverlay, type OverlayHandles } from './overlay/host.js';
+import { Highlight } from './overlay/highlight.js';
+import { RegionRect } from './overlay/region-rect.js';
+import { MarkerManager } from './overlay/markers.js';
+import { CommentPopup } from './overlay/comment-popup.js';
+import { showPulse } from './overlay/pulse.js';
+import { Picker } from './picker/element-picker.js';
+import { buildAnnotation } from './capture/index.js';
+import { uniqueSelector } from './capture/selector.js';
+
+const log = createLogger('content');
+
+class ContentApp {
+  private settings: Settings;
+  private overlay: OverlayHandles;
+  private highlight: Highlight;
+  private regionRect: RegionRect;
+  private markers: MarkerManager;
+  private popup: CommentPopup;
+  private picker: Picker;
+  private currentUrl: string;
+  private active = true;
+
+  constructor(settings: Settings) {
+    this.settings = settings;
+    this.overlay = ensureOverlay();
+    this.highlight = new Highlight(this.overlay.layer);
+    this.regionRect = new RegionRect(this.overlay.layer);
+    this.markers = new MarkerManager(this.overlay.layer, {
+      onMarkerClick: (id, ev) => this.handleMarkerClick(id, ev),
+    });
+    this.popup = new CommentPopup(this.overlay.layer);
+    this.picker = new Picker(this.highlight, this.regionRect, {
+      onPickElement: (el) => this.handlePickElement(el),
+      onPickRegion: (rect) => this.handlePickRegion(rect),
+      onCancel: () => this.handleCancel(),
+      isOurDom: (el) => this.isOurDom(el),
+    });
+    this.currentUrl = location.href;
+    this.setupTabMessageListener();
+    this.setupSettingsListener();
+    this.setupUrlChangeListener();
+    void this.refreshMarkers();
+  }
+
+  togglePicker(): void {
+    if (this.popup.isOpen()) {
+      this.popup.close();
+      return;
+    }
+    if (this.picker.isActive()) {
+      this.picker.stop();
+    } else {
+      this.picker.start();
+    }
+  }
+
+  private isOurDom(el: Element): boolean {
+    return el === this.overlay.shadowRoot.host || this.overlay.shadowRoot.host.contains(el);
+  }
+
+  private async refreshMarkers(): Promise<void> {
+    const r = await sendRequest<{ pins: import('../common/messaging.js').PinForPage[] }>({
+      kind: 'pins:for-url',
+      url: location.href,
+    });
+    if (r.ok) this.markers.update(r.pins);
+  }
+
+  private handlePickElement(el: Element): void {
+    this.picker.stop();
+    const rect = el.getBoundingClientRect();
+    const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    const selectorPreview = previewSelector(el);
+    this.popup.open({
+      anchorRect,
+      selectorPreview,
+      enableSpeech: this.settings.flags.enableWebSpeech,
+      onConfirm: async ({ comment, voiceTranscript }) => {
+        try {
+          const payload = await buildAnnotation(
+            { kind: 'element', element: el, comment, voiceTranscript },
+            this.settings,
+          );
+          const resp = await sendRequest<{ id: string }>({ kind: 'pin', payload });
+          if (!resp.ok) {
+            log.warn('pin failed', resp.error);
+          }
+          await this.refreshMarkers();
+        } catch (e) {
+          log.error('build annotation failed', e);
+        }
+      },
+      onCancel: () => {
+        /* noop */
+      },
+    });
+  }
+
+  private handlePickRegion(rect: RectInfo): void {
+    this.picker.stop();
+    this.popup.open({
+      anchorRect: rect,
+      selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
+      enableSpeech: this.settings.flags.enableWebSpeech,
+      onConfirm: async ({ comment, voiceTranscript }) => {
+        try {
+          const payload = await buildAnnotation(
+            { kind: 'region', rect, comment, voiceTranscript },
+            this.settings,
+          );
+          const resp = await sendRequest<{ id: string }>({ kind: 'pin', payload });
+          if (!resp.ok) log.warn('pin failed', resp.error);
+          await this.refreshMarkers();
+        } catch (e) {
+          log.error('build annotation failed', e);
+        }
+      },
+      onCancel: () => {
+        /* noop */
+      },
+    });
+  }
+
+  private handleCancel(): void {
+    this.picker.stop();
+    this.popup.close();
+  }
+
+  private handleMarkerClick(id: string, ev: MouseEvent): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const remove = window.confirm('Remove this DOMPin annotation?');
+    if (!remove) return;
+    void sendRequest({ kind: 'cancel', id }).then((r) => {
+      if (r.ok) void this.refreshMarkers();
+    });
+  }
+
+  private setupTabMessageListener(): void {
+    chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+      if (!message || typeof message !== 'object' || !('kind' in message)) return false;
+      const cmd = message as TabCommand;
+      switch (cmd.kind) {
+        case 'picker:toggle':
+          this.togglePicker();
+          sendResponse({ ok: true });
+          return false;
+        case 'picker:open':
+          if (!this.picker.isActive()) this.picker.start();
+          sendResponse({ ok: true });
+          return false;
+        case 'picker:close':
+          if (this.picker.isActive()) this.picker.stop();
+          sendResponse({ ok: true });
+          return false;
+        case 'highlight':
+          this.executeHighlight(cmd.selector, cmd.durationMs ?? 1500);
+          sendResponse({ ok: true });
+          return false;
+        case 'scrollTo':
+          this.executeScrollTo(cmd.selector, cmd.behavior ?? 'smooth');
+          sendResponse({ ok: true });
+          return false;
+        case 'pins:update':
+          void this.refreshMarkers();
+          sendResponse({ ok: true });
+          return false;
+      }
+      return false;
+    });
+  }
+
+  private setupSettingsListener(): void {
+    onSettingsChange((next) => {
+      const wasAllowed = isOriginAllowed(location.href, this.settings.allowlist);
+      const isAllowedNow = isOriginAllowed(location.href, next.allowlist);
+      this.settings = next;
+      if (wasAllowed && !isAllowedNow) {
+        this.shutdown();
+      }
+    });
+  }
+
+  private setupUrlChangeListener(): void {
+    const checkUrl = () => {
+      if (location.href !== this.currentUrl) {
+        this.currentUrl = location.href;
+        void this.refreshMarkers();
+      }
+    };
+    addEventListener('popstate', checkUrl);
+    const orig = history.pushState;
+    if (orig && !(history as unknown as { __dompinPatched?: boolean }).__dompinPatched) {
+      history.pushState = function (...args: Parameters<History['pushState']>) {
+        const r = orig.apply(this, args);
+        window.dispatchEvent(new Event('dompin:locationchange'));
+        return r;
+      };
+      const origReplace = history.replaceState;
+      history.replaceState = function (...args: Parameters<History['replaceState']>) {
+        const r = origReplace.apply(this, args);
+        window.dispatchEvent(new Event('dompin:locationchange'));
+        return r;
+      };
+      (history as unknown as { __dompinPatched: boolean }).__dompinPatched = true;
+    }
+    addEventListener('dompin:locationchange', checkUrl);
+  }
+
+  private executeHighlight(selector: string, durationMs: number): void {
+    let el: Element | null = null;
+    try {
+      el = document.querySelector(selector);
+    } catch {
+      return;
+    }
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return;
+    showPulse(
+      this.overlay.layer,
+      { x: r.x, y: r.y, width: r.width, height: r.height },
+      durationMs,
+    );
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }
+
+  private executeScrollTo(selector: string, behavior: ScrollBehavior): void {
+    let el: Element | null = null;
+    try {
+      el = document.querySelector(selector);
+    } catch {
+      return;
+    }
+    if (!el) return;
+    el.scrollIntoView({ behavior, block: 'center', inline: 'nearest' });
+  }
+
+  private shutdown(): void {
+    if (!this.active) return;
+    this.active = false;
+    this.picker.stop();
+    this.popup.destroy();
+    this.markers.destroy();
+    this.regionRect.destroy();
+    this.highlight.destroy();
+    teardownOverlay();
+  }
+}
+
+function previewSelector(el: Element): string {
+  try {
+    const sel = uniqueSelector(el);
+    return sel.length > 80 ? sel.slice(0, 77) + '...' : sel;
+  } catch {
+    return el.tagName.toLowerCase();
+  }
+}
+
+async function bootstrap(): Promise<void> {
+  if (window.top !== window.self) return;
+  installConsoleBuffer();
+  const settings = await loadSettings();
+  if (!isOriginAllowed(location.href, settings.allowlist)) {
+    log.info('origin not allowed, idle');
+    onSettingsChange((next) => {
+      if (isOriginAllowed(location.href, next.allowlist)) {
+        new ContentApp(next);
+      }
+    });
+    return;
+  }
+  new ContentApp(settings);
+}
+
+void bootstrap();
