@@ -32,8 +32,11 @@ export function App(): JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<string>('');
   const [showOnboardingForced, setShowOnboardingForced] = useState(false);
+  const [sessionFlash, setSessionFlash] = useState(false);
   const originRef = useRef<OriginTab>(EMPTY_ORIGIN);
   const stateRef = useRef<ExtensionState | null>(null);
+  const sessionCardRef = useRef<HTMLElement | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     void bootstrap();
@@ -45,10 +48,16 @@ export function App(): JSX.Element {
     };
     const onMessage = (msg: unknown, sender: chrome.runtime.MessageSender): boolean | undefined => {
       if (!msg || typeof msg !== 'object' || !('kind' in msg)) return false;
-      const m = msg as { kind: string; active?: boolean };
+      const m = msg as { kind: string; active?: boolean; tabId?: number };
       if (m.kind === 'picker:state-broadcast') {
         if (sender.tab?.id === originRef.current.tabId) {
           setPickerOn(Boolean(m.active));
+        }
+        return false;
+      }
+      if (m.kind === 'picker:needs-session') {
+        if (m.tabId == null || m.tabId === originRef.current.tabId) {
+          flashSessionCard();
         }
         return false;
       }
@@ -207,13 +216,49 @@ export function App(): JSX.Element {
   }
 
   async function togglePicker(): Promise<void> {
+    if (!activeSession) {
+      flashSessionCard();
+      return;
+    }
     setBusy('toggle');
     setError(null);
     try {
-      const r = await sendRequest({ kind: 'toggle-picker' });
+      const r = await sendRequest({ kind: 'toggle-picker', mode: 'sticky' });
       if (!r.ok) setError(r.error);
     } finally {
       setBusy(null);
+    }
+  }
+
+  function flashSessionCard(): void {
+    setSessionFlash(true);
+    setTimeout(() => {
+      sessionCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      setSessionFlash(false);
+      flashTimerRef.current = null;
+    }, 1800);
+  }
+
+  async function startPickerForTab(): Promise<void> {
+    const tabId = originRef.current.tabId;
+    if (tabId == null) return;
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: 'picker:open', mode: 'sticky' });
+    } catch {
+      // tab may not have content script
+    }
+  }
+
+  async function stopPickerForTab(): Promise<void> {
+    const tabId = originRef.current.tabId;
+    if (tabId == null) return;
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: 'picker:close' });
+    } catch {
+      // tab may not have content script
     }
   }
 
@@ -241,6 +286,7 @@ export function App(): JSX.Element {
         setActiveSession(r.session);
         setPins([]);
         await refreshState();
+        await startPickerForTab();
       } else {
         setError(r.error);
       }
@@ -294,6 +340,7 @@ export function App(): JSX.Element {
     try {
       const r = await sendRequest({ kind: 'session:archive', sessionId: activeSession.id });
       if (r.ok) {
+        await stopPickerForTab();
         setActiveSession(null);
         setPins([]);
         await refreshState();
@@ -357,37 +404,24 @@ export function App(): JSX.Element {
     setShowOnboardingForced(true);
   }
 
-  function openVaultFolder(): void {
-    setError('Chrome does not allow opening folders directly. Open Finder or Explorer manually.');
-  }
-
   if (!state) {
     return (
       <div className="shell">
-        <Head
-          onOpenSettings={openSettings}
-          onShowOnboarding={showOnboarding}
-          onOpenVaultFolder={openVaultFolder}
-          vaultConfigured={false}
-        />
+        <Head onOpenSettings={openSettings} onShowOnboarding={showOnboarding} />
         <div className="loading">Loading…</div>
       </div>
     );
   }
 
   const vault = state.vault;
-  const isVaultReady = vault.configured && !vault.needsReconnect && !vault.unreachable;
   const showWizard = !vault.configured || showOnboardingForced;
   const pickerState: PickerState = pickerOn ? 'on' : 'off';
+  const sessionDraftOpen = newDraft !== null || renameDraft !== null;
+  const showHero = Boolean(activeSession) && !sessionDraftOpen;
 
   return (
     <div className="shell">
-      <Head
-        onOpenSettings={openSettings}
-        onShowOnboarding={showOnboarding}
-        onOpenVaultFolder={openVaultFolder}
-        vaultConfigured={vault.configured && !vault.unreachable}
-      />
+      <Head onOpenSettings={openSettings} onShowOnboarding={showOnboarding} />
       <div className="body">
         {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
 
@@ -400,7 +434,16 @@ export function App(): JSX.Element {
         ) : null}
 
         {showWizard ? (
-          <WizardCard busy={busy === 'pick'} onPick={() => void pickFolder()} />
+          <WizardCard
+            busy={busy === 'pick'}
+            onPick={() => void pickFolder()}
+            vaultConfigured={vault.configured}
+            onClose={
+              vault.configured && showOnboardingForced
+                ? () => setShowOnboardingForced(false)
+                : undefined
+            }
+          />
         ) : vault.needsReconnect ? (
           <ReconnectCard
             rootName={vault.rootName}
@@ -410,12 +453,9 @@ export function App(): JSX.Element {
           />
         ) : (
           <>
-            <PickerHero
-              state={pickerState}
-              busy={busy === 'toggle'}
-              onToggle={() => void togglePicker()}
-            />
             <ActiveSessionCard
+              ref={sessionCardRef}
+              flash={sessionFlash}
               session={activeSession}
               domain={origin.domain}
               busy={busy}
@@ -431,6 +471,13 @@ export function App(): JSX.Element {
               onRenameDraftChange={setRenameDraft}
               onEndSession={() => void endSession()}
             />
+            {showHero ? (
+              <PickerHero
+                state={pickerState}
+                busy={busy === 'toggle'}
+                onToggle={() => void togglePicker()}
+              />
+            ) : null}
             <PinListCard
               pins={pins}
               editingId={editingId}
@@ -454,6 +501,8 @@ export function App(): JSX.Element {
         rootName={vault.rootName}
         configured={vault.configured && !vault.needsReconnect}
         unreachable={vault.unreachable}
+        onChangeVault={() => void pickFolder()}
+        busyChange={busy === 'pick'}
       />
     </div>
   );

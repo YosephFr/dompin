@@ -32,8 +32,8 @@ export type RequestMessage =
   | { kind: 'capture-viewport-clean' }
   | { kind: 'capture-element'; rect: RectInfo; dpr: number; padding?: number }
   | { kind: 'pins:for-tab'; tabId?: number }
-  | { kind: 'toggle-picker' }
-  | { kind: 'picker:state-broadcast'; active: boolean }
+  | { kind: 'toggle-picker'; mode?: 'sticky' | 'oneShot' }
+  | { kind: 'picker:state-broadcast'; active: boolean; mode?: 'sticky' | 'oneShot' }
   | { kind: 'settings:save'; settings: Settings };
 
 export type Resp<T extends object = Record<string, never>> =
@@ -55,12 +55,13 @@ export type CaptureResp = Resp<{ dataUrl: string }>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 
 export type TabCommand =
-  | { kind: 'picker:toggle' }
-  | { kind: 'picker:open' }
+  | { kind: 'picker:toggle'; mode?: 'sticky' | 'oneShot' }
+  | { kind: 'picker:open'; mode?: 'sticky' | 'oneShot' }
   | { kind: 'picker:close' }
   | { kind: 'picker:query-state' }
   | { kind: 'annotate:context' }
-  | { kind: 'pins:update' };
+  | { kind: 'pins:update' }
+  | { kind: 'picker:needs-session' };
 
 export function sendRequest<T extends object = Record<string, never>>(
   req: RequestMessage,

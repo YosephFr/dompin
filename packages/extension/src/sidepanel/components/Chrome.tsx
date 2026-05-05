@@ -10,21 +10,14 @@ export interface MenuAction {
 export function Head({
   onOpenSettings,
   onShowOnboarding,
-  onOpenVaultFolder,
-  vaultConfigured,
 }: {
   onOpenSettings: () => void;
   onShowOnboarding: () => void;
-  onOpenVaultFolder: () => void;
-  vaultConfigured: boolean;
 }): JSX.Element {
   const items: MenuAction[] = [
     { id: 'settings', label: 'Open settings', onClick: onOpenSettings },
     { id: 'onboarding', label: 'Show onboarding', onClick: onShowOnboarding },
   ];
-  if (vaultConfigured) {
-    items.push({ id: 'open-vault', label: 'Open vault folder', onClick: onOpenVaultFolder });
-  }
 
   return (
     <header className="head">
@@ -100,10 +93,14 @@ export function Foot({
   rootName,
   configured,
   unreachable,
+  onChangeVault,
+  busyChange,
 }: {
   rootName: string | null;
   configured: boolean;
   unreachable: boolean;
+  onChangeVault: () => void;
+  busyChange: boolean;
 }): JSX.Element {
   return (
     <footer className="foot">
@@ -114,9 +111,21 @@ export function Foot({
             ? `Vault unreachable: ${rootName ?? '—'}`
             : `Vault: ${rootName ?? '—'}`}
       </span>
-      <span className={`foot-dot ${configured && !unreachable ? 'is-ok' : 'is-warn'}`}>
-        {configured && !unreachable ? '●' : '○'}
-      </span>
+      <div className="foot-actions">
+        <button
+          type="button"
+          className="icon-btn icon-btn-tiny"
+          onClick={onChangeVault}
+          disabled={busyChange}
+          aria-label="Change vault folder"
+          title="Change vault folder"
+        >
+          <PencilIcon />
+        </button>
+        <span className={`foot-dot ${configured && !unreachable ? 'is-ok' : 'is-warn'}`}>
+          {configured && !unreachable ? '●' : '○'}
+        </span>
+      </div>
     </footer>
   );
 }
@@ -175,6 +184,25 @@ function DotsIcon(): JSX.Element {
       <circle cx="3.5" cy="8" r="1.5" />
       <circle cx="8" cy="8" r="1.5" />
       <circle cx="12.5" cy="8" r="1.5" />
+    </svg>
+  );
+}
+
+function PencilIcon(): JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M11.4 2.6a1.5 1.5 0 0 1 2.1 2.1L5 13.2l-3 .8.8-3z" />
+      <path d="m10.5 3.5 2 2" />
     </svg>
   );
 }

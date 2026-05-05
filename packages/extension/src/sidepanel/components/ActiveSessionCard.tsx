@@ -1,23 +1,9 @@
-import type { FormEvent } from 'react';
+import { forwardRef, type FormEvent } from 'react';
 import type { Session } from '../../common/types.js';
 import { relativeTime, type Busy } from '../utils.js';
 
-export function ActiveSessionCard({
-  session,
-  domain,
-  busy,
-  renameDraft,
-  newDraft,
-  onStartNew,
-  onCommitNew,
-  onCancelNew,
-  onNewDraftChange,
-  onStartRename,
-  onCommitRename,
-  onCancelRename,
-  onRenameDraftChange,
-  onEndSession,
-}: {
+export interface ActiveSessionCardProps {
+  flash?: boolean;
   session: Session | null;
   domain: string | null;
   busy: Busy;
@@ -32,49 +18,72 @@ export function ActiveSessionCard({
   onCancelRename: () => void;
   onRenameDraftChange: (v: string) => void;
   onEndSession: () => void;
-}): JSX.Element {
-  return (
-    <section className="card">
-      <div className="card-header">
-        <span className="card-eyebrow">Session</span>
-        {session ? (
-          <span className="session-meta">
-            {relativeTime(session.lastWriteAt ?? session.startedAt)}
-          </span>
-        ) : null}
-      </div>
-
-      {newDraft !== null ? (
-        <NewSessionForm
-          value={newDraft}
-          busy={busy === 'new'}
-          onChange={onNewDraftChange}
-          onSubmit={onCommitNew}
-          onCancel={onCancelNew}
-        />
-      ) : renameDraft !== null ? (
-        <RenameForm
-          value={renameDraft}
-          busy={busy === 'rename'}
-          onChange={onRenameDraftChange}
-          onSubmit={onCommitRename}
-          onCancel={onCancelRename}
-        />
-      ) : session ? (
-        <ActiveSessionInfo
-          session={session}
-          domain={domain}
-          busy={busy}
-          onStartNew={onStartNew}
-          onStartRename={onStartRename}
-          onEndSession={onEndSession}
-        />
-      ) : (
-        <EmptySessionInfo domain={domain} onStartNew={onStartNew} />
-      )}
-    </section>
-  );
 }
+
+export const ActiveSessionCard = forwardRef<HTMLElement, ActiveSessionCardProps>(
+  function ActiveSessionCard(
+    {
+      flash,
+      session,
+      domain,
+      busy,
+      renameDraft,
+      newDraft,
+      onStartNew,
+      onCommitNew,
+      onCancelNew,
+      onNewDraftChange,
+      onStartRename,
+      onCommitRename,
+      onCancelRename,
+      onRenameDraftChange,
+      onEndSession,
+    },
+    ref,
+  ): JSX.Element {
+    return (
+      <section ref={ref} className={`card session-card ${flash ? 'is-flashing' : ''}`}>
+        <div className="card-header">
+          <span className="card-eyebrow">Session</span>
+          {session ? (
+            <span className="session-meta">
+              {relativeTime(session.lastWriteAt ?? session.startedAt)}
+            </span>
+          ) : null}
+        </div>
+
+        {newDraft !== null ? (
+          <NewSessionForm
+            value={newDraft}
+            busy={busy === 'new'}
+            onChange={onNewDraftChange}
+            onSubmit={onCommitNew}
+            onCancel={onCancelNew}
+          />
+        ) : renameDraft !== null ? (
+          <RenameForm
+            value={renameDraft}
+            busy={busy === 'rename'}
+            onChange={onRenameDraftChange}
+            onSubmit={onCommitRename}
+            onCancel={onCancelRename}
+          />
+        ) : session ? (
+          <ActiveSessionInfo
+            session={session}
+            domain={domain}
+            busy={busy}
+            onStartNew={onStartNew}
+            onStartRename={onStartRename}
+            onEndSession={onEndSession}
+          />
+        ) : (
+          <EmptySessionInfo domain={domain} onStartNew={onStartNew} />
+        )}
+      </section>
+    );
+  },
+);
 
 function NewSessionForm({
   value,
@@ -210,12 +219,12 @@ function EmptySessionInfo({
       <div className="session-name session-name-empty">No session yet</div>
       <p className="card-text">
         {domain
-          ? `Pin an element on ${domain} to start a session here.`
+          ? `Name a session for ${domain} to start pinning elements.`
           : 'Open a regular tab to start a session.'}
       </p>
       <div className="card-actions">
-        <button type="button" className="btn btn-secondary" onClick={onStartNew}>
-          Name session…
+        <button type="button" className="btn btn-primary" onClick={onStartNew} disabled={!domain}>
+          Start new session
         </button>
       </div>
     </>

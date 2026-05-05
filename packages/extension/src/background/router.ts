@@ -24,6 +24,7 @@ import {
 } from './vault-writer.js';
 import { sendTabCommand } from './tab-bridge.js';
 import { captureElement, captureViewport } from './screenshot.js';
+import { gatePickerBySession } from './picker-gate.js';
 
 const log = createLogger('router');
 
@@ -115,6 +116,11 @@ async function handle(
       }
       const pageUrl = req.payload.page.url;
       const pageTitle = req.payload.page.title;
+      const existing = await getActiveSession(tabId);
+      if (!existing) {
+        await gatePickerBySession(tabId);
+        return err('No active session for this tab. Create one first.');
+      }
       const session = await ensureSession(tabId, pageUrl, pageTitle);
       try {
         const result = await writeAnnotation(session, req.payload);
@@ -176,7 +182,9 @@ async function handle(
     case 'toggle-picker': {
       const tabId = await resolveActiveTabId(sender);
       if (typeof tabId !== 'number') return err('No active tab');
-      await sendTabCommand(tabId, { kind: 'picker:toggle' });
+      const allowed = await gatePickerBySession(tabId);
+      if (!allowed) return err('No active session');
+      await sendTabCommand(tabId, { kind: 'picker:toggle', mode: req.mode ?? 'sticky' });
       return ok({});
     }
     case 'settings:save': {

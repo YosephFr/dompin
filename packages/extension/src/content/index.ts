@@ -56,22 +56,42 @@ class ContentApp {
     void this.refreshMarkers();
   }
 
-  togglePicker(): void {
+  togglePicker(mode: 'sticky' | 'oneShot' = 'sticky'): void {
     if (this.popup.isOpen()) {
       this.popup.close();
       return;
     }
     if (this.picker.isActive()) {
+      if (mode === 'oneShot' && this.picker.getMode() === 'sticky') return;
       this.picker.stop();
       this.broadcastPickerState(false);
     } else {
-      this.picker.start();
-      this.broadcastPickerState(true);
+      this.picker.start(mode);
+      this.broadcastPickerState(true, mode);
     }
   }
 
-  private broadcastPickerState(active: boolean): void {
-    void sendRequest({ kind: 'picker:state-broadcast', active });
+  startPicker(mode: 'sticky' | 'oneShot'): void {
+    if (this.picker.isActive()) {
+      if (mode === 'oneShot' && this.picker.getMode() === 'sticky') return;
+      this.picker.stop();
+    }
+    this.picker.start(mode);
+    this.broadcastPickerState(true, mode);
+  }
+
+  stopPicker(): void {
+    if (!this.picker.isActive()) return;
+    this.picker.stop();
+    this.broadcastPickerState(false);
+  }
+
+  private broadcastPickerState(active: boolean, mode?: 'sticky' | 'oneShot'): void {
+    void sendRequest({
+      kind: 'picker:state-broadcast',
+      active,
+      ...(active && mode ? { mode } : {}),
+    });
   }
 
   private isOurDom(el: Element): boolean {
@@ -94,6 +114,7 @@ class ContentApp {
   }
 
   private handlePickElement(el: Element): void {
+    const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
     const rect = el.getBoundingClientRect();
     const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -104,16 +125,19 @@ class ContentApp {
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
         await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
-        this.picker.resume();
+        if (wasOneShot) this.stopPicker();
+        else this.picker.resume();
       },
       onCancel: () => {
         this.highlight.hide();
-        this.picker.resume();
+        if (wasOneShot) this.stopPicker();
+        else this.picker.resume();
       },
     });
   }
 
   private handlePickRegion(rect: RectInfo): void {
+    const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
     this.popup.open({
       anchorRect: rect,
@@ -121,10 +145,12 @@ class ContentApp {
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript }) => {
         await this.runCapture({ kind: 'region', rect, comment, voiceTranscript }, rect);
-        this.picker.resume();
+        if (wasOneShot) this.stopPicker();
+        else this.picker.resume();
       },
       onCancel: () => {
-        this.picker.resume();
+        if (wasOneShot) this.stopPicker();
+        else this.picker.resume();
       },
     });
   }
@@ -178,10 +204,7 @@ class ContentApp {
       this.popup.close();
       return;
     }
-    if (this.picker.isActive()) {
-      this.picker.stop();
-      this.broadcastPickerState(false);
-    }
+    this.stopPicker();
   }
 
   private handleMarkerClick(id: string, ev: MouseEvent): void {
@@ -200,15 +223,15 @@ class ContentApp {
       const cmd = message as TabCommand;
       switch (cmd.kind) {
         case 'picker:toggle':
-          this.togglePicker();
+          this.togglePicker(cmd.mode ?? 'sticky');
           sendResponse({ ok: true });
           return false;
         case 'picker:open':
-          if (!this.picker.isActive()) this.picker.start();
+          this.startPicker(cmd.mode ?? 'sticky');
           sendResponse({ ok: true });
           return false;
         case 'picker:close':
-          if (this.picker.isActive()) this.picker.stop();
+          this.stopPicker();
           sendResponse({ ok: true });
           return false;
         case 'annotate:context':
@@ -216,7 +239,14 @@ class ContentApp {
           sendResponse({ ok: true });
           return false;
         case 'picker:query-state':
-          sendResponse({ ok: true, active: this.picker.isActive() });
+          sendResponse({
+            ok: true,
+            active: this.picker.isActive(),
+            mode: this.picker.getMode(),
+          });
+          return false;
+        case 'picker:needs-session':
+          sendResponse({ ok: true });
           return false;
         case 'pins:update':
           void this.refreshMarkers();

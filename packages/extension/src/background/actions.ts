@@ -1,6 +1,6 @@
 import { sendTabCommand } from './tab-bridge.js';
-import { getStatus } from './vault.js';
 import { createLogger } from '../common/logger.js';
+import { gatePickerBySession } from './picker-gate.js';
 
 const log = createLogger('actions');
 
@@ -9,10 +9,6 @@ const DEMO_PATH = 'examples/demo-app/index.html';
 
 export function setupActions(): void {
   configureSidePanel();
-
-  chrome.action.onClicked.addListener((tab) => {
-    void onActionClick(tab);
-  });
 
   ensureContextMenus();
   chrome.runtime.onInstalled.addListener((details) => {
@@ -25,9 +21,15 @@ export function setupActions(): void {
 
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === ANNOTATE_MENU_ID && typeof tab?.id === 'number') {
-      void sendTabCommand(tab.id, { kind: 'annotate:context' });
+      void onAnnotateContext(tab.id);
     }
   });
+}
+
+async function onAnnotateContext(tabId: number): Promise<void> {
+  const ok = await gatePickerBySession(tabId);
+  if (!ok) return;
+  await sendTabCommand(tabId, { kind: 'annotate:context' });
 }
 
 function configureSidePanel(): void {
@@ -35,21 +37,6 @@ function configureSidePanel(): void {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => {
     log.warn('setPanelBehavior failed', e);
   });
-}
-
-async function onActionClick(tab: chrome.tabs.Tab): Promise<void> {
-  let targetId = tab.id;
-  if (typeof targetId !== 'number') {
-    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-    targetId = active?.id;
-  }
-  if (typeof targetId !== 'number') return;
-
-  const status = await getStatus().catch(() => null);
-  if (!status?.configured || status.needsReconnect) return;
-
-  const delivered = await sendTabCommand(targetId, { kind: 'picker:toggle' });
-  if (!delivered) log.debug('picker toggle did not reach tab', targetId);
 }
 
 async function openOnboarding(): Promise<void> {

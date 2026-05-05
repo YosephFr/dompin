@@ -6,6 +6,8 @@ import { applyCrosshairCursor, removeCrosshairCursor } from './cursor-style.js';
 const HOVER_DEBOUNCE_MS = 50;
 const REGION_MIN_SIZE = 6;
 
+export type PickerMode = 'sticky' | 'oneShot';
+
 export interface PickerCallbacks {
   onPickElement: (el: Element) => void;
   onPickRegion: (rect: RectInfo) => void;
@@ -16,6 +18,7 @@ export interface PickerCallbacks {
 export class Picker {
   private active = false;
   private paused = false;
+  private mode: PickerMode = 'sticky';
   private hoverTimer: number | null = null;
   private regionStart: { x: number; y: number } | null = null;
 
@@ -25,10 +28,14 @@ export class Picker {
     private cb: PickerCallbacks,
   ) {}
 
-  start(): void {
-    if (this.active) return;
+  start(mode: PickerMode = 'sticky'): void {
+    if (this.active) {
+      if (mode === 'sticky') this.mode = 'sticky';
+      return;
+    }
     this.active = true;
     this.paused = false;
+    this.mode = mode;
     applyCrosshairCursor();
     addEventListener('mousemove', this.onMouseMove, true);
     addEventListener('mousedown', this.onMouseDown, true);
@@ -42,6 +49,7 @@ export class Picker {
     if (!this.active) return;
     this.active = false;
     this.paused = false;
+    this.mode = 'sticky';
     removeCrosshairCursor();
     removeEventListener('mousemove', this.onMouseMove, true);
     removeEventListener('mousedown', this.onMouseDown, true);
@@ -77,6 +85,10 @@ export class Picker {
 
   isPaused(): boolean {
     return this.paused;
+  }
+
+  getMode(): PickerMode {
+    return this.mode;
   }
 
   private isLive(): boolean {
@@ -154,7 +166,6 @@ export class Picker {
     if (!this.isLive()) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    this.cb.onCancel();
   };
 
   private targetElement(ev: MouseEvent): Element | null {
