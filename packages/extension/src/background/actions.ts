@@ -3,7 +3,7 @@ import { createLogger } from '../common/logger.js';
 
 const log = createLogger('actions');
 
-const QUEUE_MENU_ID = 'dompin-open-queue';
+const PANEL_MENU_ID = 'dompin-open-panel';
 const POPUP_PATH = 'src/popup/popup.html';
 const POPUP_WIDTH = 400;
 const POPUP_HEIGHT = 560;
@@ -18,8 +18,8 @@ export function setupActions(): void {
   chrome.runtime.onStartup.addListener(() => ensureContextMenus());
 
   chrome.contextMenus.onClicked.addListener((info) => {
-    if (info.menuItemId === QUEUE_MENU_ID) {
-      void openQueueWindow();
+    if (info.menuItemId === PANEL_MENU_ID) {
+      void openPanelWindow();
     }
   });
 }
@@ -40,7 +40,7 @@ async function togglePickerOnActiveTab(tab: chrome.tabs.Tab): Promise<void> {
   }
 }
 
-async function openQueueWindow(): Promise<void> {
+async function openPanelWindow(): Promise<void> {
   try {
     await chrome.windows.create({
       url: chrome.runtime.getURL(POPUP_PATH),
@@ -50,7 +50,7 @@ async function openQueueWindow(): Promise<void> {
       focused: true,
     });
   } catch (e) {
-    log.warn('open queue window failed', e);
+    log.warn('open panel window failed', e);
   }
 }
 
@@ -58,8 +58,8 @@ function ensureContextMenus(): void {
   try {
     chrome.contextMenus.removeAll(() => {
       chrome.contextMenus.create({
-        id: QUEUE_MENU_ID,
-        title: 'Open DOMPin queue',
+        id: PANEL_MENU_ID,
+        title: 'Open DOMPin panel',
         contexts: ['action'],
       });
     });
