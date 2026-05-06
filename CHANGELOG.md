@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-06
+
+### Added
+
+- **Hero screenshot** at the top of `README.md`: shows DOMPin in action on a real page so visitors get the gist before reading the prose.
+- **Kebab menu** in the side panel's Session card for **Rename** and **End session**. The action row no longer wraps to two lines on narrow side panels — only **New session** stays inline.
+- **Drop-pin brand logo** (inline SVG) in the side panel and options page header, replacing the placeholder square mark. Matches the extension icon family.
+
+### Changed
+
+- **`New session` always prompts for a name now**, on every install, regardless of past settings. The form opens with placeholder "Session name (optional)" — press Enter without typing to fall back to the default `host_HHMM` name. One predictable flow.
+- **Session card layout**: secondary actions (Rename, End session) live under a kebab in the card header instead of crowding the action row.
+
+### Fixed
+
+- **Session auto-naming was inconsistent across Chrome installs.** Some profiles silently auto-named sessions while others prompted, depending on whether the hidden `promptSessionName` flag had ever been toggled. Removed the flag entirely; behavior is now the same everywhere.
+
+### Removed
+
+- The hidden `promptSessionName` capture-options toggle in the options page. Session naming is no longer configurable — the prompt is always shown, with a sensible default available via Enter.
+
 ## [0.2.1] — 2026-05-05
 
 ### Fixed
@@ -92,6 +113,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.3.0]: https://github.com/YosephFr/dompin/releases/tag/v0.3.0
 [0.2.1]: https://github.com/YosephFr/dompin/releases/tag/v0.2.1
 [0.2.0]: https://github.com/YosephFr/dompin/releases/tag/v0.2.0
 [0.1.0]: https://github.com/YosephFr/dompin/releases/tag/v0.1.0

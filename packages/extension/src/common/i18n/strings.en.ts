@@ -46,7 +46,7 @@ export const en = {
     newButton: 'New session',
     rename: 'Rename',
     end: 'End session',
-    endTooltip: 'Stop writing to this session. Files stay where they are.',
+    menuOpen: 'More session actions',
     endConfirm:
       'End this session? You can start a new one anytime. Your files stay where they are.',
     namePlaceholder: 'Session name (optional)',

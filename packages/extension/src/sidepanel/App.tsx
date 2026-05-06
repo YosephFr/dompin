@@ -289,11 +289,7 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   }
 
   function startNewSession(): void {
-    if (state?.settings.flags.promptSessionName) {
-      setNewDraft('');
-    } else {
-      void commitNewSession(null);
-    }
+    setNewDraft('');
   }
 
   async function commitNewSession(name: string | null): Promise<void> {

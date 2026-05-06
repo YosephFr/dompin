@@ -5,6 +5,7 @@ import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { mergeSettings } from '../common/settings.js';
 import { clearRootHandle, requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
+import { BrandLogo } from '../common/icons/BrandLogo.js';
 
 type Step = 'welcome' | 'pick' | 'done' | 'settings';
 
@@ -25,11 +26,6 @@ const FLAGS: { key: FlagKey; label: string; description: string }[] = [
     key: 'enableReactFiber',
     label: 'React Fiber introspection',
     description: 'Adds component name, owner chain, and source location for React apps.',
-  },
-  {
-    key: 'promptSessionName',
-    label: 'Ask for a name when starting a session',
-    description: 'Shows a name prompt instead of generating one from the page title.',
   },
 ];
 
@@ -384,7 +380,9 @@ function PageHeader({ title }: { title: string }): JSX.Element {
   return (
     <header className="page-header">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-mark" aria-hidden="true">
+          <BrandLogo size={20} />
+        </span>
         <h1>{title}</h1>
       </div>
     </header>

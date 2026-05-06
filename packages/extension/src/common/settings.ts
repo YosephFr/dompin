@@ -8,7 +8,6 @@ export interface Settings {
     captureNetworkFailures: boolean;
     enableWebSpeech: boolean;
     enableReactFiber: boolean;
-    promptSessionName: boolean;
   };
   preferences: {
     theme: ThemePreference;
@@ -23,7 +22,6 @@ export const DEFAULT_SETTINGS: Settings = {
     captureNetworkFailures: false,
     enableWebSpeech: true,
     enableReactFiber: true,
-    promptSessionName: false,
   },
   preferences: {
     theme: 'auto',

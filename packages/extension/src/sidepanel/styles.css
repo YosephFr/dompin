@@ -101,11 +101,17 @@ body {
 }
 
 .brand-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.brand-mark svg {
+  display: block;
 }
 
 .brand-name {
@@ -245,9 +251,16 @@ body {
 
 .card-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 22px;
+}
+
+.card-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .card-eyebrow {

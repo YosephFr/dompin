@@ -49,7 +49,7 @@ export const es: Strings = {
     newButton: 'Nueva sesión',
     rename: 'Renombrar',
     end: 'Terminar sesión',
-    endTooltip: 'Deja de escribir en esta sesión. Los archivos quedan donde están.',
+    menuOpen: 'Más acciones de sesión',
     endConfirm:
       '¿Terminar esta sesión? Podés empezar una nueva en cualquier momento. Los archivos quedan donde están.',
     namePlaceholder: 'Nombre de sesión (opcional)',

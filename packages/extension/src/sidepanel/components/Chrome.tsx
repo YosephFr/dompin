@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LocalePreference, ThemePreference } from '../../common/settings.js';
 import { useT } from '../../common/i18n/index.js';
+import { BrandLogo } from '../../common/icons/BrandLogo.js';
 
 export function Head({
   onOpenSettings,
@@ -21,7 +22,9 @@ export function Head({
   return (
     <header className="head">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-mark" aria-hidden="true">
+          <BrandLogo size={16} />
+        </span>
         <span className="brand-name">DOMPin</span>
       </div>
       <div className="head-actions">

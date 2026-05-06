@@ -2,6 +2,10 @@
 
 > Pin elements on any web page. Annotations land in a folder on your machine, ready for any AI coding agent.
 
+<p align="center">
+  <img src="docs/assets/dompin-hero.png" alt="DOMPin side panel pinning the Google logo with an inline comment popup" width="960" />
+</p>
+
 DOMPin is a Chrome extension that lets you click any element on any web page, drop a comment, and capture the full DOM context — selector, XPath, outerHTML preview, computed styles, viewport and zoomed screenshots, React Fiber info, console state — straight into a folder you choose. Hand the folder to Claude Code, Cursor, or any tool that reads local files. No server, no port to manage.
 
 ## How it works
@@ -33,7 +37,7 @@ Each `NN.md` contains your comment, the picked element data, and links to the sc
 
 ## Sessions
 
-Sessions are explicit and named. The side panel shows the current session for the active tab; **Start new session** opens an inline name field so you can split work into focused folders. The card lists pin count and last-write time at a glance, with **Rename** and **End session** controls on the same row. End session stops the picker and frees the tab — your files stay where they are.
+Sessions are explicit and named. The side panel shows the current session for the active tab; **New session** opens an inline name field so you can split work into focused folders. Press Enter without typing anything and DOMPin falls back to a default name like `host_HHMM`. The card lists pin count and last-write time at a glance; **Rename** and **End session** live in the kebab menu on the right of the card header. End session stops the picker and frees the tab — your files stay where they are.
 
 Recent sessions for the same domain are listed below for quick context, and pins on the current page can be edited or deleted right from the side panel.
 
