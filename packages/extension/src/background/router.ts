@@ -22,9 +22,10 @@ import {
   regenerateSessionReadme,
   writeAnnotation,
 } from './vault-writer.js';
-import { sendTabCommand } from './tab-bridge.js';
+import { sendTabCommand, sendTabCommandWithInject } from './tab-bridge.js';
 import { captureElement, captureViewport } from './screenshot.js';
 import { gatePickerBySession } from './picker-gate.js';
+import { checkPageAccess } from './page-access.js';
 
 const log = createLogger('router');
 
@@ -181,10 +182,17 @@ async function handle(
     }
     case 'toggle-picker': {
       const tabId = await resolveActiveTabId(sender);
-      if (typeof tabId !== 'number') return err('No active tab');
+      if (typeof tabId !== 'number') return err('PAGE:no-tab');
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      const access = checkPageAccess(tab?.url);
+      if (!access.ok) return err(`PAGE:${access.code}`);
       const allowed = await gatePickerBySession(tabId);
-      if (!allowed) return err('No active session');
-      await sendTabCommand(tabId, { kind: 'picker:toggle', mode: req.mode ?? 'sticky' });
+      if (!allowed) return err('PAGE:no-session');
+      const sent = await sendTabCommandWithInject(tabId, {
+        kind: 'picker:toggle',
+        mode: req.mode ?? 'sticky',
+      });
+      if (!sent) return err('PAGE:needs-refresh');
       return ok({});
     }
     case 'settings:save': {

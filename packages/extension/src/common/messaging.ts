@@ -63,6 +63,11 @@ export type TabCommand =
   | { kind: 'pins:update' }
   | { kind: 'picker:needs-session' };
 
+export type BroadcastMessage =
+  | { kind: 'picker:state-broadcast'; active: boolean; mode?: 'sticky' | 'oneShot' }
+  | { kind: 'picker:needs-session'; tabId?: number }
+  | { kind: 'picker:error'; message: string; tabId?: number };
+
 export function sendRequest<T extends object = Record<string, never>>(
   req: RequestMessage,
 ): Promise<Resp<T>> {

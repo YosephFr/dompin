@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-05-06
+
+### Fixed
+
+- **Picker now reports a clear error when it can't reach the page.** Before, clicking **Start picking** on a tab where the content script was not loaded (or could not be loaded) silently did nothing. The side panel now surfaces a localized error message in the banner — for example, _"DOMPin needs to load on this page. Refresh the tab and try again."_ on regular sites where the script never bootstrapped, or _"DOMPin can't pick on chrome:// pages."_ on internal browser pages.
+- **Inject-on-demand fallback.** When the page is a regular http(s) site but the content script isn't loaded yet (typical for tabs that were already open before the extension was installed or reloaded), the background now uses `chrome.scripting.executeScript` to inject the script and retries the command automatically — no more "refresh" required for that case.
+
+### Changed
+
+- **Specific error messages by URL type.** The side panel banner now distinguishes between `chrome://`, `chrome-extension://`, `about:`/`edge://`, `view-source:`, `data:`, `file://`, the Chrome Web Store, and unsupported schemes. Each gets its own localized hint pointing to the right next step.
+- **Keyboard shortcut and right-click menu also surface the error.** When `⌘⇧.` or **Annotate element with DOMPin** can't reach the page, the side panel opens automatically and shows the same banner, so the failure is no longer hidden when the user wasn't looking at the panel.
+
+### Removed
+
+- **No more demo tab on install.** The first-install flow no longer opens `examples/demo-app/index.html` automatically. The side panel onboarding wizard is the single entry point. The demo files are kept in the repo for local QA only and are no longer bundled into the extension's web-accessible resources.
+
 ## [0.3.0] — 2026-05-06
 
 ### Added
@@ -113,6 +129,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.3.1]: https://github.com/YosephFr/dompin/releases/tag/v0.3.1
 [0.3.0]: https://github.com/YosephFr/dompin/releases/tag/v0.3.0
 [0.2.1]: https://github.com/YosephFr/dompin/releases/tag/v0.2.1
 [0.2.0]: https://github.com/YosephFr/dompin/releases/tag/v0.2.0

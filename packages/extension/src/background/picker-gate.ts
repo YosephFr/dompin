@@ -11,7 +11,7 @@ export async function gatePickerBySession(tabId: number): Promise<boolean> {
   return false;
 }
 
-async function openSidePanelFor(tabId: number): Promise<void> {
+export async function openSidePanelFor(tabId: number): Promise<void> {
   if (!chrome.sidePanel?.open) return;
   try {
     await chrome.sidePanel.open({ tabId });

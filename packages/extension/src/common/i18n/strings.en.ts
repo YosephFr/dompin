@@ -126,6 +126,23 @@ export const en = {
     vault: (name: string) => `Vault: ${name}`,
     changeVault: 'Change vault folder',
   },
+  errors: {
+    chromeInternal:
+      "DOMPin can't pick on chrome:// pages. Open a regular site like google.com to start pinning.",
+    extensionPage: "DOMPin can't pick on extension or new-tab pages. Open a regular site.",
+    aboutPage: "DOMPin can't pick on internal browser pages. Open a regular site.",
+    viewSource: "DOMPin can't pick on view-source: pages. Open the page itself instead.",
+    webstore: 'Chrome blocks extensions on the Web Store. Open another tab to use DOMPin.',
+    dataUrl: "DOMPin can't pick on data: URLs.",
+    fileUrl:
+      "To use DOMPin on local files, enable 'Allow access to file URLs' for the extension at chrome://extensions.",
+    unsupportedScheme: 'DOMPin only works on regular http(s) websites.',
+    noTab: "Couldn't read the active tab. Try clicking on the page first.",
+    needsRefresh:
+      'DOMPin needs to load on this page. Refresh the tab and try again — the picker will work after the reload.',
+    noSession: 'Start a session for this tab first, then try again.',
+    unknown: 'Something went wrong. Please try again.',
+  },
 };
 
 export type Strings = typeof en;

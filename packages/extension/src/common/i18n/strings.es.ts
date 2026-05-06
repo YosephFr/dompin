@@ -129,4 +129,23 @@ export const es: Strings = {
     vault: (name: string) => `Vault: ${name}`,
     changeVault: 'Cambiar carpeta del vault',
   },
+  errors: {
+    chromeInternal:
+      'DOMPin no puede usarse en páginas chrome://. Abrí un sitio común como google.com para empezar a anotar.',
+    extensionPage:
+      'DOMPin no puede usarse en páginas de extensiones ni en pestañas nuevas. Abrí un sitio común.',
+    aboutPage: 'DOMPin no puede usarse en páginas internas del navegador. Abrí un sitio común.',
+    viewSource:
+      'DOMPin no puede usarse en páginas view-source:. Abrí la página directa en lugar del view-source.',
+    webstore: 'Chrome bloquea las extensiones en la Web Store. Abrí otra pestaña para usar DOMPin.',
+    dataUrl: 'DOMPin no puede usarse en URLs data:.',
+    fileUrl:
+      "Para usar DOMPin en archivos locales, activá 'Allow access to file URLs' para la extensión en chrome://extensions.",
+    unsupportedScheme: 'DOMPin solo funciona en sitios web regulares (http/https).',
+    noTab: 'No se pudo leer la pestaña activa. Hacé clic en la página y volvé a intentar.',
+    needsRefresh:
+      'DOMPin necesita cargarse en esta página. Recargá la pestaña y volvé a intentar — el picker va a funcionar después del reload.',
+    noSession: 'Iniciá una sesión para esta pestaña antes de continuar.',
+    unknown: 'Algo salió mal. Volvé a intentar.',
+  },
 };

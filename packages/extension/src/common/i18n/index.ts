@@ -37,3 +37,27 @@ export function I18nProvider({
 export function useT(): Strings {
   return useContext(I18nContext);
 }
+
+const PAGE_ERROR_KEYS: Record<string, keyof Strings['errors']> = {
+  'no-tab': 'noTab',
+  'chrome-internal': 'chromeInternal',
+  'extension-page': 'extensionPage',
+  'about-page': 'aboutPage',
+  'view-source': 'viewSource',
+  webstore: 'webstore',
+  'data-url': 'dataUrl',
+  'file-url': 'fileUrl',
+  'unsupported-scheme': 'unsupportedScheme',
+  'needs-refresh': 'needsRefresh',
+  'no-session': 'noSession',
+};
+
+export function localizeError(t: Strings, raw: string | null | undefined): string {
+  if (!raw) return '';
+  if (raw.startsWith('PAGE:')) {
+    const code = raw.slice('PAGE:'.length);
+    const key = PAGE_ERROR_KEYS[code];
+    return key ? t.errors[key] : t.errors.unknown;
+  }
+  return raw;
+}

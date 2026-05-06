@@ -3,7 +3,7 @@ import type { PinForPage, Session, SessionListItem, VaultStatus } from '../commo
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
-import { I18nProvider, resolveLocale, useT } from '../common/i18n/index.js';
+import { I18nProvider, localizeError, resolveLocale, useT } from '../common/i18n/index.js';
 import type { LocalePreference, Settings, ThemePreference } from '../common/settings.js';
 import { DEFAULT_SETTINGS } from '../common/settings.js';
 import { applyTheme } from './theme.js';
@@ -74,7 +74,12 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     };
     const onMessage = (msg: unknown, sender: chrome.runtime.MessageSender): boolean | undefined => {
       if (!msg || typeof msg !== 'object' || !('kind' in msg)) return false;
-      const m = msg as { kind: string; active?: boolean; tabId?: number };
+      const m = msg as {
+        kind: string;
+        active?: boolean;
+        tabId?: number;
+        message?: string;
+      };
       if (m.kind === 'picker:state-broadcast') {
         if (sender.tab?.id === originRef.current.tabId) {
           setPickerOn(Boolean(m.active));
@@ -84,6 +89,12 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
       if (m.kind === 'picker:needs-session') {
         if (m.tabId == null || m.tabId === originRef.current.tabId) {
           flashSessionCard();
+        }
+        return false;
+      }
+      if (m.kind === 'picker:error') {
+        if (m.tabId == null || m.tabId === originRef.current.tabId) {
+          setError(typeof m.message === 'string' ? m.message : 'PAGE:unknown');
         }
         return false;
       }
@@ -482,7 +493,9 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
         onLocaleChange={setLocalePref}
       />
       <div className="body">
-        {error ? <ErrorBanner message={error} onDismiss={() => setError(null)} /> : null}
+        {error ? (
+          <ErrorBanner message={localizeError(t, error)} onDismiss={() => setError(null)} />
+        ) : null}
 
         {vault.configured && vault.unreachable ? (
           <UnreachableBanner

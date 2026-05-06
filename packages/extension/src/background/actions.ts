@@ -1,35 +1,41 @@
-import { sendTabCommand } from './tab-bridge.js';
+import { sendTabCommandWithInject } from './tab-bridge.js';
 import { createLogger } from '../common/logger.js';
-import { gatePickerBySession } from './picker-gate.js';
+import { gatePickerBySession, openSidePanelFor } from './picker-gate.js';
+import { checkPageAccess } from './page-access.js';
+import { broadcastPickerError } from './picker-error.js';
 
 const log = createLogger('actions');
 
 const ANNOTATE_MENU_ID = 'dompin-annotate-element';
-const DEMO_PATH = 'examples/demo-app/index.html';
 
 export function setupActions(): void {
   configureSidePanel();
 
   ensureContextMenus();
-  chrome.runtime.onInstalled.addListener((details) => {
-    ensureContextMenus();
-    if (details.reason === 'install') {
-      void openOnboarding();
-    }
-  });
+  chrome.runtime.onInstalled.addListener(() => ensureContextMenus());
   chrome.runtime.onStartup.addListener(() => ensureContextMenus());
 
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === ANNOTATE_MENU_ID && typeof tab?.id === 'number') {
-      void onAnnotateContext(tab.id);
+      void onAnnotateContext(tab.id, tab.url ?? null);
     }
   });
 }
 
-async function onAnnotateContext(tabId: number): Promise<void> {
+async function onAnnotateContext(tabId: number, tabUrl: string | null): Promise<void> {
+  const access = checkPageAccess(tabUrl);
+  if (!access.ok) {
+    await openSidePanelFor(tabId);
+    await broadcastPickerError(tabId, `PAGE:${access.code}`);
+    return;
+  }
   const ok = await gatePickerBySession(tabId);
   if (!ok) return;
-  await sendTabCommand(tabId, { kind: 'annotate:context' });
+  const sent = await sendTabCommandWithInject(tabId, { kind: 'annotate:context' });
+  if (!sent) {
+    await openSidePanelFor(tabId);
+    await broadcastPickerError(tabId, 'PAGE:needs-refresh');
+  }
 }
 
 function configureSidePanel(): void {
@@ -37,22 +43,6 @@ function configureSidePanel(): void {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => {
     log.warn('setPanelBehavior failed', e);
   });
-}
-
-async function openOnboarding(): Promise<void> {
-  try {
-    const url = chrome.runtime.getURL(DEMO_PATH);
-    const tab = await chrome.tabs.create({ url, active: true });
-    if (typeof tab.id === 'number' && chrome.sidePanel?.open) {
-      try {
-        await chrome.sidePanel.open({ tabId: tab.id });
-      } catch (e) {
-        log.debug('sidePanel.open on install skipped', e);
-      }
-    }
-  } catch (e) {
-    log.warn('open onboarding failed', e);
-  }
 }
 
 function ensureContextMenus(): void {
