@@ -2,7 +2,6 @@ import { forwardRef, type FormEvent } from 'react';
 import type { Session } from '../../common/types.js';
 import { relativeTime, type Busy } from '../utils.js';
 import { useT } from '../../common/i18n/index.js';
-import { KebabMenu } from './KebabMenu.js';
 
 export interface ActiveSessionCardProps {
   flash?: boolean;
@@ -44,31 +43,13 @@ export const ActiveSessionCard = forwardRef<HTMLElement, ActiveSessionCardProps>
     ref,
   ): JSX.Element {
     const t = useT();
-    const showSessionMenu = session !== null && newDraft === null && renameDraft === null;
     return (
       <section ref={ref} className={`card session-card ${flash ? 'is-flashing' : ''}`}>
         <div className="card-header">
           <span className="card-eyebrow">{t.session.eyebrow}</span>
           {session ? (
-            <span className="card-header-right">
-              <span className="session-meta">
-                {relativeTime(session.lastWriteAt ?? session.startedAt, t)}
-              </span>
-              {showSessionMenu ? (
-                <KebabMenu
-                  ariaLabel={t.session.menuOpen}
-                  size="sm"
-                  items={[
-                    { label: t.session.rename, onClick: onStartRename },
-                    {
-                      label: t.session.end,
-                      onClick: onEndSession,
-                      danger: true,
-                      disabled: busy === 'archive',
-                    },
-                  ]}
-                />
-              ) : null}
+            <span className="session-meta">
+              {relativeTime(session.lastWriteAt ?? session.startedAt, t)}
             </span>
           ) : null}
         </div>
@@ -90,7 +71,14 @@ export const ActiveSessionCard = forwardRef<HTMLElement, ActiveSessionCardProps>
             onCancel={onCancelRename}
           />
         ) : session ? (
-          <ActiveSessionInfo session={session} domain={domain} onStartNew={onStartNew} />
+          <ActiveSessionInfo
+            session={session}
+            domain={domain}
+            busy={busy}
+            onStartNew={onStartNew}
+            onStartRename={onStartRename}
+            onEndSession={onEndSession}
+          />
         ) : (
           <EmptySessionInfo domain={domain} onStartNew={onStartNew} />
         )}
@@ -178,11 +166,17 @@ function RenameForm({
 function ActiveSessionInfo({
   session,
   domain,
+  busy,
   onStartNew,
+  onStartRename,
+  onEndSession,
 }: {
   session: Session;
   domain: string | null;
+  busy: Busy;
   onStartNew: () => void;
+  onStartRename: () => void;
+  onEndSession: () => void;
 }): JSX.Element {
   const t = useT();
   return (
@@ -198,6 +192,22 @@ function ActiveSessionInfo({
       <div className="card-actions">
         <button type="button" className="btn btn-secondary" onClick={onStartNew}>
           {t.session.newButton}
+        </button>
+      </div>
+      <div className="card-actions secondary">
+        <button type="button" className="btn-link" onClick={onStartRename}>
+          {t.session.rename}
+        </button>
+        <span className="card-actions-sep" aria-hidden="true">
+          ·
+        </span>
+        <button
+          type="button"
+          className="btn-link is-danger"
+          onClick={onEndSession}
+          disabled={busy === 'archive'}
+        >
+          {t.session.end}
         </button>
       </div>
     </>

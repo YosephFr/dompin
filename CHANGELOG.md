@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-05-06
+
+### Changed
+
+- **Rename and End session are visible again on the Session card.** The kebab introduced in 0.3.0 was not discoverable enough — users couldn't find the Rename / End controls. They are now back as plain link-style buttons on a secondary row right under **New session**, separated by a thin dashed divider so the visual hierarchy stays clean. **End session** uses a danger-tinted hover state.
+
 ## [0.3.1] — 2026-05-06
 
 ### Fixed
@@ -129,6 +135,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.3.2]: https://github.com/YosephFr/dompin/releases/tag/v0.3.2
 [0.3.1]: https://github.com/YosephFr/dompin/releases/tag/v0.3.1
 [0.3.0]: https://github.com/YosephFr/dompin/releases/tag/v0.3.0
 [0.2.1]: https://github.com/YosephFr/dompin/releases/tag/v0.2.1

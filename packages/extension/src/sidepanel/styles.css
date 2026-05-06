@@ -301,6 +301,51 @@ body {
   margin-top: 0;
 }
 
+.card-actions.secondary {
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+
+.card-actions-sep {
+  color: var(--border);
+  font-size: 11px;
+  user-select: none;
+}
+
+.btn-link {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 120ms,
+    background 120ms;
+}
+
+.btn-link:not(:disabled):hover {
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.btn-link.is-danger:not(:disabled):hover {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .session-name {
   font-size: 14px;
   font-weight: 600;
