@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-05-06
+
+### Changed
+
+- **No more "New session" while a session is active.** The Session card now only shows **Rename** and **End session** while a session is in progress. To start a new one, you have to end the current session first — `Iniciar nueva sesión` reappears as the primary button on the empty card. Cleaner mental model: one explicit cycle per session, no half-overlap.
+
 ## [0.3.2] — 2026-05-06
 
 ### Changed
@@ -135,6 +141,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.3.3]: https://github.com/YosephFr/dompin/releases/tag/v0.3.3
 [0.3.2]: https://github.com/YosephFr/dompin/releases/tag/v0.3.2
 [0.3.1]: https://github.com/YosephFr/dompin/releases/tag/v0.3.1
 [0.3.0]: https://github.com/YosephFr/dompin/releases/tag/v0.3.0

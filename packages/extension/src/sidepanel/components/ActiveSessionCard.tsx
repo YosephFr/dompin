@@ -75,7 +75,6 @@ export const ActiveSessionCard = forwardRef<HTMLElement, ActiveSessionCardProps>
             session={session}
             domain={domain}
             busy={busy}
-            onStartNew={onStartNew}
             onStartRename={onStartRename}
             onEndSession={onEndSession}
           />
@@ -167,14 +166,12 @@ function ActiveSessionInfo({
   session,
   domain,
   busy,
-  onStartNew,
   onStartRename,
   onEndSession,
 }: {
   session: Session;
   domain: string | null;
   busy: Busy;
-  onStartNew: () => void;
   onStartRename: () => void;
   onEndSession: () => void;
 }): JSX.Element {
@@ -188,11 +185,6 @@ function ActiveSessionInfo({
           ·
         </span>
         <span>{t.session.pinCount(session.annotationCount)}</span>
-      </div>
-      <div className="card-actions">
-        <button type="button" className="btn btn-secondary" onClick={onStartNew}>
-          {t.session.newButton}
-        </button>
       </div>
       <div className="card-actions secondary">
         <button type="button" className="btn-link" onClick={onStartRename}>
