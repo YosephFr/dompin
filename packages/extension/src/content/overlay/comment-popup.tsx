@@ -19,6 +19,7 @@ interface PopupOptions {
 export class CommentPopup {
   private mount: HTMLElement;
   private root: Root | null = null;
+  private flushFn: (() => void) | null = null;
 
   constructor(private layer: HTMLElement) {
     this.mount = document.createElement('div');
@@ -31,8 +32,20 @@ export class CommentPopup {
   open(opts: PopupOptions): void {
     if (!this.root) this.root = createRoot(this.mount);
     this.root.render(
-      <PopupView {...opts} onLifecycle={(action) => action === 'close' && this.close()} />,
+      <PopupView
+        {...opts}
+        registerFlush={(fn) => {
+          this.flushFn = fn;
+        }}
+        onLifecycle={(action) => action === 'close' && this.close()}
+      />,
     );
+  }
+
+  /** Submit the note if it has content, otherwise cancel it. Used when the
+   * picker is stopped while a note is still open. */
+  flush(): void {
+    this.flushFn?.();
   }
 
   close(): void {
@@ -40,6 +53,7 @@ export class CommentPopup {
       this.root.unmount();
       this.root = null;
     }
+    this.flushFn = null;
   }
 
   isOpen(): boolean {
@@ -54,10 +68,19 @@ export class CommentPopup {
 
 interface InternalProps extends PopupOptions {
   onLifecycle: (action: 'close') => void;
+  registerFlush: (fn: () => void) => void;
 }
 
 function PopupView(props: InternalProps): JSX.Element {
-  const { anchorRect, selectorPreview, enableSpeech, onConfirm, onCancel, onLifecycle } = props;
+  const {
+    anchorRect,
+    selectorPreview,
+    enableSpeech,
+    onConfirm,
+    onCancel,
+    onLifecycle,
+    registerFlush,
+  } = props;
   const [comment, setComment] = useState('');
   const [transcript, setTranscript] = useState('');
   const [recording, setRecording] = useState(false);
@@ -76,8 +99,9 @@ function PopupView(props: InternalProps): JSX.Element {
   const speechAvailable = enableSpeech;
 
   useEffect(() => {
-    // Focus the textarea immediately so the user can type the note right away,
-    // and again after layout in case the mount race lost it.
+    // Focus the textarea so typing starts immediately. Do it now, after layout,
+    // and once more after a tick — a right click (whose contextmenu fires on
+    // mousedown) is followed by a mouseup that can otherwise steal focus.
     textareaRef.current?.focus();
     requestAnimationFrame(() => {
       if (cardRef.current) {
@@ -86,6 +110,8 @@ function PopupView(props: InternalProps): JSX.Element {
       }
       textareaRef.current?.focus();
     });
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 80);
+    return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -112,6 +138,16 @@ function PopupView(props: InternalProps): JSX.Element {
     onCancel();
     onLifecycle('close');
   };
+
+  // Let the host flush this note (submit if it has content, else cancel) when
+  // the picker is stopped mid-note. Re-registered each render so the closure
+  // reads the current comment.
+  useEffect(() => {
+    registerFlush(() => {
+      if (comment.trim()) handleConfirm();
+      else handleCancel();
+    });
+  });
 
   const handleKey = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends the note; Shift+Enter inserts a newline.

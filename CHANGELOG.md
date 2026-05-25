@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] — 2026-05-25
+
+### Changed
+
+- **Screenshots are taken the instant you pick, not when you submit the note.** Clicking a DOM element or releasing a drag-region now freezes the viewport and the element/region crop immediately, then opens the note popup. So short-lived UI — dropdowns, toasts, hover states — is captured as it looked at pick time, even if it changes (or you take a while) while writing the note. (There's a brief moment between the click and the popup while the capture runs.)
+
+### Fixed
+
+- **The note box now focuses on a right-click pick too.** The secondary-button release no longer reaches the page to steal focus, and the textarea re-focuses shortly after opening, so you can type immediately however you picked.
+- **Stopping the picker mid-note no longer leaves the note stranded.** If a note is still open when you stop the picker, it's now submitted when it has content and cancelled when it's empty — instead of hanging without saving or closing.
+
 ## [0.4.6] — 2026-05-25
 
 ### Added
@@ -210,6 +221,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.7]: https://github.com/YosephFr/dompin/releases/tag/v0.4.7
 [0.4.6]: https://github.com/YosephFr/dompin/releases/tag/v0.4.6
 [0.4.5]: https://github.com/YosephFr/dompin/releases/tag/v0.4.5
 [0.4.4]: https://github.com/YosephFr/dompin/releases/tag/v0.4.4

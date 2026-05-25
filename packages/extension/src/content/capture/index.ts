@@ -1,8 +1,12 @@
 import type {
   AnnotationAttachment,
   AnnotationPayload,
+  ConsoleEntry,
   ElementContext,
+  PageContext,
   RectInfo,
+  RegionContext,
+  ScreenshotSet,
 } from '../../common/types.js';
 import { sendRequest } from '../../common/messaging.js';
 import { newId } from '../../common/id.js';
@@ -11,23 +15,30 @@ import { snapshotConsole } from '../console-buffer.js';
 import { captureElement } from './element.js';
 import { capturePage } from './page.js';
 
-export interface PinInputElement {
-  kind: 'element';
-  element: Element;
+/** What is being pinned — captured at click time, before the note is written. */
+export type PinTarget = { kind: 'element'; element: Element } | { kind: 'region'; rect: RectInfo };
+
+/** The note content, gathered from the popup when the user submits. */
+export interface PinNote {
   comment: string;
   voiceTranscript: string | null;
   attachments: AnnotationAttachment[];
 }
 
-export interface PinInputRegion {
-  kind: 'region';
-  rect: RectInfo;
-  comment: string;
-  voiceTranscript: string | null;
-  attachments: AnnotationAttachment[];
+/**
+ * The screenshots and DOM metadata captured the moment the pin is placed (a
+ * click on an element or release of a drag-region). Held until the note is
+ * submitted, so the saved images reflect the page at pick time, not at submit.
+ */
+export interface PinCapture {
+  id: string;
+  createdAt: number;
+  page: PageContext;
+  element: ElementContext | null;
+  region: RegionContext | null;
+  screenshots: ScreenshotSet;
+  console: ConsoleEntry[];
 }
-
-export type PinInput = PinInputElement | PinInputRegion;
 
 export interface CaptureOverlay {
   showHighlight(el: Element): void;
@@ -37,30 +48,34 @@ export interface CaptureOverlay {
   withOverlayHidden<T>(fn: () => Promise<T>): Promise<T>;
 }
 
-export async function buildAnnotation(
-  input: PinInput,
+/**
+ * Capture the page at the moment the pin is placed: viewport + element/region
+ * screenshots and DOM metadata. Runs before the comment popup opens.
+ */
+export async function capturePin(
+  target: PinTarget,
   settings: Settings,
   overlay: CaptureOverlay,
   provisionalOrdinal: number,
-): Promise<AnnotationPayload> {
+): Promise<PinCapture> {
   const page = capturePage();
   const dpr = page.viewport.devicePixelRatio;
-  let elementCtx = null;
-  let regionCtx = null;
+  let elementCtx: ElementContext | null = null;
+  let regionCtx: RegionContext | null = null;
   let rect: RectInfo | null = null;
 
-  if (input.kind === 'element') {
-    elementCtx = captureElement(input.element, {
+  if (target.kind === 'element') {
+    elementCtx = captureElement(target.element, {
       enableReactFiber: settings.flags.enableReactFiber,
     });
     rect = elementCtx.boundingRect;
-    overlay.showHighlight(input.element);
+    overlay.showHighlight(target.element);
   } else {
     regionCtx = {
-      rect: input.rect,
-      elements: captureElementsInRegion(input.rect, settings),
+      rect: target.rect,
+      elements: captureElementsInRegion(target.rect, settings),
     };
-    rect = input.rect;
+    rect = target.rect;
   }
 
   if (rect) overlay.showProvisional(provisionalOrdinal, rect, regionCtx ? 'region' : 'element');
@@ -84,21 +99,32 @@ export async function buildAnnotation(
     elementShot = elemResp.ok ? elemResp.dataUrl : null;
   }
 
-  overlay.hideProvisional();
-
-  const payload: AnnotationPayload = {
+  return {
     id: newId(),
     createdAt: Date.now(),
     page,
     element: elementCtx,
     region: regionCtx,
-    comment: input.comment.trim(),
-    attachments: input.attachments.length ? input.attachments : undefined,
     screenshots: { viewport: viewportShot, element: elementShot },
     console: snapshotConsole(),
   };
-  if (input.voiceTranscript && input.voiceTranscript.trim().length > 0) {
-    payload.voiceTranscript = input.voiceTranscript.trim();
+}
+
+/** Combine a capture with the written note into the final payload to persist. */
+export function assembleAnnotation(capture: PinCapture, note: PinNote): AnnotationPayload {
+  const payload: AnnotationPayload = {
+    id: capture.id,
+    createdAt: capture.createdAt,
+    page: capture.page,
+    element: capture.element,
+    region: capture.region,
+    comment: note.comment.trim(),
+    attachments: note.attachments.length ? note.attachments : undefined,
+    screenshots: capture.screenshots,
+    console: capture.console,
+  };
+  if (note.voiceTranscript && note.voiceTranscript.trim().length > 0) {
+    payload.voiceTranscript = note.voiceTranscript.trim();
   }
   return payload;
 }

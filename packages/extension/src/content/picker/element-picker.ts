@@ -142,13 +142,16 @@ export class Picker {
   };
 
   private onMouseUp = (ev: MouseEvent): void => {
+    // A secondary-button release must never reach the page while the picker is
+    // active — even once paused (note popup open) — so it can't steal focus from
+    // the textarea after a right-click pick.
+    if (this.active && ev.button === 2) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
     if (!this.isLive()) return;
     if (ev.button !== 0 && ev.button !== 2) return;
     if (!this.regionStart) {
-      if (ev.button === 2) {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-      }
       this.pointerDown = null;
       return;
     }

@@ -16,7 +16,13 @@ import { RegionRect } from './overlay/region-rect.js';
 import { MarkerManager } from './overlay/markers.js';
 import { CommentPopup } from './overlay/comment-popup.js';
 import { Picker } from './picker/element-picker.js';
-import { buildAnnotation, type CaptureOverlay } from './capture/index.js';
+import {
+  capturePin,
+  assembleAnnotation,
+  type CaptureOverlay,
+  type PinCapture,
+  type PinTarget,
+} from './capture/index.js';
 import { uniqueSelector } from './capture/selector.js';
 
 const log = createLogger('content');
@@ -33,6 +39,7 @@ class ContentApp {
   private active = true;
   private lastRightClickedEl: Element | null = null;
   private urlPollId: number | null = null;
+  private stopping = false;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -83,8 +90,12 @@ class ContentApp {
 
   stopPicker(): void {
     if (!this.picker.isActive()) return;
+    // Stopping mid-note submits it if it has content, otherwise cancels it.
+    this.stopping = true;
+    if (this.popup.isOpen()) this.popup.flush();
     this.picker.stop();
     this.broadcastPickerState(false);
+    this.stopping = false;
   }
 
   private broadcastPickerState(active: boolean, mode?: 'sticky' | 'oneShot'): void {
@@ -118,83 +129,21 @@ class ContentApp {
   private handlePickElement(el: Element): void {
     const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
-    this.highlight.show(el);
-    const rect = el.getBoundingClientRect();
-    const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    const provisionalOrd = this.markers.count() + 1;
-    this.markers.showProvisional(provisionalOrd, anchorRect);
-    const selectorPreview = previewSelector(el);
-    this.popup.open({
+    const r = el.getBoundingClientRect();
+    const anchorRect: RectInfo = { x: r.x, y: r.y, width: r.width, height: r.height };
+    void this.startNote(
+      { kind: 'element', element: el },
       anchorRect,
-      selectorPreview,
-      enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
-        await this.runCapture(
-          { kind: 'element', element: el, comment, voiceTranscript, attachments },
-          rect,
-        );
-        if (wasOneShot) this.stopPicker();
-        else this.picker.resume();
-      },
-      onCancel: () => {
-        this.markers.hideProvisional();
-        this.highlight.hide();
-        if (wasOneShot) this.stopPicker();
-        else this.picker.resume();
-      },
-    });
+      previewSelector(el),
+      wasOneShot,
+    );
   }
 
   private handlePickRegion(rect: RectInfo): void {
     const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
-    const provisionalOrd = this.markers.count() + 1;
-    this.markers.showProvisional(provisionalOrd, rect, 'region');
-    this.popup.open({
-      anchorRect: rect,
-      selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
-      enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
-        await this.runCapture(
-          { kind: 'region', rect, comment, voiceTranscript, attachments },
-          rect,
-        );
-        if (wasOneShot) this.stopPicker();
-        else this.picker.resume();
-      },
-      onCancel: () => {
-        this.markers.hideProvisional();
-        if (wasOneShot) this.stopPicker();
-        else this.picker.resume();
-      },
-    });
-  }
-
-  private async runCapture(
-    input: Parameters<typeof buildAnnotation>[0],
-    targetRect: RectInfo | DOMRect,
-  ): Promise<void> {
-    const provisionalOrd = this.markers.count() + 1;
-    const overlay = this.captureOverlay();
-    if (input.kind === 'element') {
-      overlay.showHighlight(input.element);
-    }
-    overlay.showProvisional(
-      provisionalOrd,
-      toRectInfo(targetRect),
-      input.kind === 'region' ? 'region' : 'element',
-    );
-    try {
-      const payload = await buildAnnotation(input, this.settings, overlay, provisionalOrd);
-      const resp = await sendRequest({ kind: 'annotation:add', payload });
-      if (!resp.ok) log.warn('annotation add failed', resp.error);
-      await this.refreshMarkers();
-    } catch (e) {
-      log.error('capture failed', e);
-    } finally {
-      overlay.hideProvisional();
-      this.highlight.hide();
-    }
+    const preview = `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+    void this.startNote({ kind: 'region', rect }, rect, preview, wasOneShot);
   }
 
   private handleAnnotateContext(): void {
@@ -202,22 +151,58 @@ class ContentApp {
     const el = this.lastRightClickedEl;
     if (!el.isConnected) return;
     if (this.isOurDom(el)) return;
-    const rect = el.getBoundingClientRect();
-    const anchorRect: RectInfo = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    const selectorPreview = previewSelector(el);
+    const r = el.getBoundingClientRect();
+    const anchorRect: RectInfo = { x: r.x, y: r.y, width: r.width, height: r.height };
+    // Right-click context-menu path: independent of the picker (no follow-up).
+    void this.startNote({ kind: 'element', element: el }, anchorRect, previewSelector(el), null);
+  }
+
+  /**
+   * Capture the pin right now — the screenshots freeze the page at this moment,
+   * not at submit — then open the note popup. `pickerFollowup` is the one-shot
+   * flag for picker-driven pins, or null for the context-menu path.
+   */
+  private async startNote(
+    target: PinTarget,
+    anchorRect: RectInfo,
+    selectorPreview: string,
+    pickerFollowup: boolean | null,
+  ): Promise<void> {
+    const provisionalOrd = this.markers.count() + 1;
+    // Immediate feedback while the (async) capture runs.
+    if (target.kind === 'element') this.highlight.show(target.element);
+    this.markers.showProvisional(provisionalOrd, anchorRect, target.kind);
+
+    let capture: PinCapture | null = null;
+    try {
+      capture = await capturePin(target, this.settings, this.captureOverlay(), provisionalOrd);
+    } catch (e) {
+      log.error('capture failed', e);
+    }
+
+    const finish = () => {
+      this.markers.hideProvisional();
+      this.highlight.hide();
+      if (pickerFollowup === null) return; // context-menu path: leave picker alone
+      if (this.stopping || !this.picker.isActive()) return; // stopPicker owns the teardown
+      if (pickerFollowup) this.stopPicker();
+      else this.picker.resume();
+    };
+
     this.popup.open({
       anchorRect,
       selectorPreview,
       enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
-        await this.runCapture(
-          { kind: 'element', element: el, comment, voiceTranscript, attachments },
-          rect,
-        );
+      onConfirm: async (note) => {
+        if (capture) {
+          const payload = assembleAnnotation(capture, note);
+          const resp = await sendRequest({ kind: 'annotation:add', payload });
+          if (!resp.ok) log.warn('annotation add failed', resp.error);
+          await this.refreshMarkers();
+        }
+        finish();
       },
-      onCancel: () => {
-        this.highlight.hide();
-      },
+      onCancel: () => finish(),
     });
   }
 
@@ -363,10 +348,6 @@ function previewSelector(el: Element): string {
   } catch {
     return el.tagName.toLowerCase();
   }
-}
-
-function toRectInfo(r: RectInfo | DOMRect): RectInfo {
-  return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
 
 async function bootstrap(): Promise<void> {
