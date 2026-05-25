@@ -116,6 +116,8 @@ export class Picker {
         ev.stopImmediatePropagation();
         this.regionStart = this.pointerDown;
         this.didRegionDrag = true;
+        // Cancel any pending hover so a queued highlight can't pop up mid-drag.
+        this.clearHoverTimer();
         this.highlight.hide();
         this.updateRegion(ev.clientX, ev.clientY);
         return;

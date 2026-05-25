@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-05-25
+
+### Fixed
+
+- **Dragging a region no longer highlights elements or selects page text.** While you drag the selection box, the blue element-highlight boxes used to keep popping up over whatever was underneath: a hover highlight queued just before the drag began fired ~50 ms later and stuck around for the rest of the drag. The pending hover is now cancelled the moment a region drag starts, so only the dashed selection rectangle shows. Dragging also no longer paints the browser's native text selection over the page — the picker applies `user-select: none` while it's live (and removes it on pause/stop, so the comment box stays editable).
+
 ## [0.4.1] — 2026-05-25
 
 ### Fixed
@@ -162,6 +168,9 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.2]: https://github.com/YosephFr/dompin/releases/tag/v0.4.2
+[0.4.1]: https://github.com/YosephFr/dompin/releases/tag/v0.4.1
+[0.4.0]: https://github.com/YosephFr/dompin/releases/tag/v0.4.0
 [0.3.3]: https://github.com/YosephFr/dompin/releases/tag/v0.3.3
 [0.3.2]: https://github.com/YosephFr/dompin/releases/tag/v0.3.2
 [0.3.1]: https://github.com/YosephFr/dompin/releases/tag/v0.3.1
