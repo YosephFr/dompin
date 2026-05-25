@@ -166,8 +166,7 @@ The TypeScript types backing this payload live in `packages/extension/src/common
 When the user drags a region instead of clicking an element:
 
 - `element` is `null` in `NN.json`.
-- `region` has the form `{ "rect": { "x": …, "y": …, "width": …, "height": … }, "corner": "br", "elements": [...] }`.
-- `region.corner` is the rect corner where the drag was released (`"tl" | "tr" | "bl" | "br"`); the numbered marker anchors there. Optional — pins written before this field default to `"tr"`.
+- `region` has the form `{ "rect": { "x": …, "y": …, "width": …, "height": … }, "elements": [...] }`.
 - `region.elements` contains up to 24 visible elements whose centers fall inside the rectangle, captured with the same selector, XPath, style, and React metadata shape used for element pins.
 - `NN.md` lists the region rectangle and the contained element selectors in place of the single element identifiers.
 - `NN.element.png` is the cropped rectangle from a clean viewport (no overlay).

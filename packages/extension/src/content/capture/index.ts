@@ -3,7 +3,6 @@ import type {
   AnnotationPayload,
   ElementContext,
   RectInfo,
-  RegionCorner,
 } from '../../common/types.js';
 import { sendRequest } from '../../common/messaging.js';
 import { newId } from '../../common/id.js';
@@ -23,7 +22,6 @@ export interface PinInputElement {
 export interface PinInputRegion {
   kind: 'region';
   rect: RectInfo;
-  corner: RegionCorner;
   comment: string;
   voiceTranscript: string | null;
   attachments: AnnotationAttachment[];
@@ -34,7 +32,7 @@ export type PinInput = PinInputElement | PinInputRegion;
 export interface CaptureOverlay {
   showHighlight(el: Element): void;
   hideHighlight(): void;
-  showProvisional(ord: number, rect: RectInfo, corner?: RegionCorner): void;
+  showProvisional(ord: number, rect: RectInfo, kind?: 'element' | 'region'): void;
   hideProvisional(): void;
   withOverlayHidden<T>(fn: () => Promise<T>): Promise<T>;
 }
@@ -60,13 +58,12 @@ export async function buildAnnotation(
   } else {
     regionCtx = {
       rect: input.rect,
-      corner: input.corner,
       elements: captureElementsInRegion(input.rect, settings),
     };
     rect = input.rect;
   }
 
-  if (rect) overlay.showProvisional(provisionalOrdinal, rect, regionCtx?.corner);
+  if (rect) overlay.showProvisional(provisionalOrdinal, rect, regionCtx ? 'region' : 'element');
 
   await waitTwoFrames();
 

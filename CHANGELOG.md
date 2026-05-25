@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] — 2026-05-25
+
+### Added
+
+- **Right-click to pin.** While the picker is on, a secondary (right) click picks the element under the cursor just like a primary click. Because many web modals close on a primary outside-click but not a secondary one, this lets you pin elements inside a modal/dropdown without dismissing it. The native context menu is suppressed while picking.
+
+### Changed
+
+- **Enter sends the note.** The comment box now submits on plain `Enter`; use `Shift+Enter` for a newline. (Was `⌘/Ctrl+Enter`.)
+- **A region's number sits at the center of its box** instead of the corner where you released the drag. Supersedes the release-corner behavior from 0.4.3; `region.corner` is no longer written to `NN.json`.
+
+### Fixed
+
+- **The note box focuses itself on open.** You can start typing immediately after picking — no extra click into the textarea.
+- **A region's box stays visible while you write its note**, matching element pins (whose highlight was already shown during writing).
+
 ## [0.4.5] — 2026-05-25
 
 ### Changed
@@ -194,6 +210,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.6]: https://github.com/YosephFr/dompin/releases/tag/v0.4.6
 [0.4.5]: https://github.com/YosephFr/dompin/releases/tag/v0.4.5
 [0.4.4]: https://github.com/YosephFr/dompin/releases/tag/v0.4.4
 [0.4.3]: https://github.com/YosephFr/dompin/releases/tag/v0.4.3

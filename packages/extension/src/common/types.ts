@@ -49,14 +49,8 @@ export interface ElementContext {
   scrollAncestorSelector: string | null;
 }
 
-/** Which corner of a region rect the numbered marker anchors to. */
-export type RegionCorner = 'tl' | 'tr' | 'bl' | 'br';
-
 export interface RegionContext {
   rect: RectInfo;
-  /** Corner where the drag was released; the marker is pinned here. Older pins
-   * without this field fall back to the top-right corner. */
-  corner?: RegionCorner;
   elements?: ElementContext[];
 }
 
@@ -171,8 +165,6 @@ export interface PinForPage {
   selector: string | null;
   /** Region rect in page/document coordinates (scroll-independent), or null. */
   region: RectInfo | null;
-  /** For region pins: corner of the rect the numbered marker anchors to. */
-  markerCorner?: RegionCorner;
   commentPreview: string;
   createdAt: number;
 }

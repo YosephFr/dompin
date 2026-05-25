@@ -1,4 +1,4 @@
-import type { RectInfo, RegionCorner } from '../../common/types.js';
+import type { RectInfo } from '../../common/types.js';
 import type { Highlight } from '../overlay/highlight.js';
 import type { RegionRect } from '../overlay/region-rect.js';
 import { applyCrosshairCursor, removeCrosshairCursor } from './cursor-style.js';
@@ -11,7 +11,7 @@ export type PickerMode = 'sticky' | 'oneShot';
 
 export interface PickerCallbacks {
   onPickElement: (el: Element) => void;
-  onPickRegion: (rect: RectInfo, corner: RegionCorner) => void;
+  onPickRegion: (rect: RectInfo) => void;
   onCancel: () => void;
   isOurDom: (el: Element) => boolean;
 }
@@ -128,16 +128,27 @@ export class Picker {
 
   private onMouseDown = (ev: MouseEvent): void => {
     if (!this.isLive()) return;
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 && ev.button !== 2) return;
     const target = this.targetElement(ev);
     if (!target) return;
+    // Secondary (right) click picks just like the primary one. Swallowing it
+    // keeps modals open — they close on a primary outside-click, not a secondary.
+    if (ev.button === 2) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
     this.pointerDown = { x: ev.clientX, y: ev.clientY };
     this.didRegionDrag = false;
   };
 
   private onMouseUp = (ev: MouseEvent): void => {
     if (!this.isLive()) return;
+    if (ev.button !== 0 && ev.button !== 2) return;
     if (!this.regionStart) {
+      if (ev.button === 2) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }
       this.pointerDown = null;
       return;
     }
@@ -152,11 +163,7 @@ export class Picker {
     const h = Math.abs(ev.clientY - start.y);
     this.regionRect.hide();
     if (w < REGION_MIN_SIZE || h < REGION_MIN_SIZE) return;
-    // Anchor the marker to the corner where the mouse was released.
-    const corner = `${ev.clientY >= start.y ? 'b' : 't'}${
-      ev.clientX >= start.x ? 'r' : 'l'
-    }` as RegionCorner;
-    this.cb.onPickRegion({ x, y, width: w, height: h }, corner);
+    this.cb.onPickRegion({ x, y, width: w, height: h });
   };
 
   private onClickCapture = (ev: MouseEvent): void => {
@@ -192,6 +199,14 @@ export class Picker {
     if (!this.isLive()) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
+    // A right click is the secondary way to pick an element. (On macOS the
+    // contextmenu fires on mousedown, so this is how the right click lands.)
+    if (this.didRegionDrag) {
+      this.didRegionDrag = false;
+      return;
+    }
+    const target = this.targetElement(ev);
+    if (target) this.cb.onPickElement(target);
   };
 
   private targetElement(ev: MouseEvent): Element | null {

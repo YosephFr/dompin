@@ -1,4 +1,4 @@
-import type { PinForPage, RegionCorner } from '../../common/types.js';
+import type { PinForPage } from '../../common/types.js';
 import { sameView } from '../../common/view-url.js';
 
 export interface MarkerCallbacks {
@@ -16,8 +16,9 @@ export class MarkerManager {
   private rafId: number | null = null;
   private pending: PinForPage[] = [];
   private provisional: HTMLElement | null = null;
+  private provisionalBox: HTMLElement | null = null;
   private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
-  private provisionalCorner: RegionCorner = 'tr';
+  private provisionalKind: 'element' | 'region' = 'element';
   private currentView = location.href;
   private hoveredId: string | null = null;
 
@@ -53,7 +54,7 @@ export class MarkerManager {
   showProvisional(
     ord: number,
     rect: { x: number; y: number; width: number; height: number },
-    corner: RegionCorner = 'tr',
+    kind: 'element' | 'region' = 'element',
   ): void {
     if (!this.provisional) {
       const el = document.createElement('div');
@@ -61,9 +62,16 @@ export class MarkerManager {
       this.layer.appendChild(el);
       this.provisional = el;
     }
+    if (!this.provisionalBox) {
+      const box = document.createElement('div');
+      box.className = 'dp-pinned-region';
+      box.style.display = 'none';
+      this.layer.appendChild(box);
+      this.provisionalBox = box;
+    }
     this.provisional.textContent = String(ord);
     this.provisionalRect = rect;
-    this.provisionalCorner = corner;
+    this.provisionalKind = kind;
     this.renderProvisional();
   }
 
@@ -72,16 +80,36 @@ export class MarkerManager {
       this.provisional.remove();
       this.provisional = null;
     }
+    if (this.provisionalBox) {
+      this.provisionalBox.remove();
+      this.provisionalBox = null;
+    }
     this.provisionalRect = null;
   }
 
   private renderProvisional(): void {
     if (!this.provisional || !this.provisionalRect) return;
-    const { x, y } = markerPos(this.provisionalRect, this.provisionalCorner);
+    const r = this.provisionalRect;
+    const isRegion = this.provisionalKind === 'region';
+    const { x, y } = isRegion ? dotCenter(r) : dotTopRight(r);
     this.provisional.style.left = '0';
     this.provisional.style.top = '0';
     this.provisional.style.transform = `translate(${x}px, ${y}px)`;
     this.provisional.style.display = 'flex';
+    // A region's box stays visible while the note is written — parity with the
+    // element highlight shown for element pins.
+    if (this.provisionalBox) {
+      if (isRegion) {
+        this.provisionalBox.style.display = 'block';
+        this.provisionalBox.style.left = '0';
+        this.provisionalBox.style.top = '0';
+        this.provisionalBox.style.transform = `translate(${r.x}px, ${r.y}px)`;
+        this.provisionalBox.style.width = `${r.width}px`;
+        this.provisionalBox.style.height = `${r.height}px`;
+      } else {
+        this.provisionalBox.style.display = 'none';
+      }
+    }
   }
 
   update(pins: PinForPage[]): void {
@@ -158,7 +186,7 @@ export class MarkerManager {
       entry.el.style.display = 'flex';
       entry.el.style.left = '0';
       entry.el.style.top = '0';
-      const m = markerPos(rect, p.markerCorner ?? 'tr');
+      const m = p.region ? dotCenter(rect) : dotTopRight(rect);
       entry.el.style.transform = `translate(${m.x}px, ${m.y}px)`;
       // A pin's box — the region rectangle or the element's bounds — shows only
       // while its numbered dot is hovered; otherwise the page stays clean.
@@ -201,18 +229,14 @@ export class MarkerManager {
   }
 }
 
-/**
- * Where the 22px numbered marker sits relative to a rect, anchored to the given
- * corner so it straddles the edge (slightly outside) like the old top-right one.
- */
-function markerPos(
-  rect: { x: number; y: number; width: number; height: number },
-  corner: RegionCorner,
-): { x: number; y: number } {
-  const left = corner === 'tl' || corner === 'bl';
-  const top = corner === 'tl' || corner === 'tr';
-  return {
-    x: left ? rect.x - 8 : rect.x + rect.width - 14,
-    y: top ? rect.y - 8 : rect.y + rect.height - 14,
-  };
+type Box = { x: number; y: number; width: number; height: number };
+
+/** Element pins: the 22px dot straddles the top-right corner of the bounds. */
+function dotTopRight(rect: Box): { x: number; y: number } {
+  return { x: rect.x + rect.width - 14, y: rect.y - 8 };
+}
+
+/** Region pins: the 22px dot is centered in the drawn box. */
+function dotCenter(rect: Box): { x: number; y: number } {
+  return { x: rect.x + rect.width / 2 - 11, y: rect.y + rect.height / 2 - 11 };
 }

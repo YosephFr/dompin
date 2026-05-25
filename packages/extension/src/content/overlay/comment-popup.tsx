@@ -76,6 +76,9 @@ function PopupView(props: InternalProps): JSX.Element {
   const speechAvailable = enableSpeech;
 
   useEffect(() => {
+    // Focus the textarea immediately so the user can type the note right away,
+    // and again after layout in case the mount race lost it.
+    textareaRef.current?.focus();
     requestAnimationFrame(() => {
       if (cardRef.current) {
         const rect = cardRef.current.getBoundingClientRect();
@@ -111,7 +114,8 @@ function PopupView(props: InternalProps): JSX.Element {
   };
 
   const handleKey = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) {
+    // Enter sends the note; Shift+Enter inserts a newline.
+    if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       handleConfirm();
       return;
@@ -257,6 +261,7 @@ function PopupView(props: InternalProps): JSX.Element {
           className="dp-textarea"
           placeholder="Describe what you want here…"
           value={comment}
+          autoFocus
           onChange={(e) => setComment(e.target.value)}
           onKeyDown={handleKey}
         />
@@ -279,8 +284,8 @@ function PopupView(props: InternalProps): JSX.Element {
         ) : null}
         {attachmentError ? <div className="dp-inline-error">{attachmentError}</div> : null}
         <div className="dp-helper">
-          <span>Pin · ⌘ Enter</span>
-          <span>Cancel · Esc</span>
+          <span>Pin · Enter</span>
+          <span>Cancel · Esc · ⇧↵ newline</span>
         </div>
       </div>
       <div className="dp-popup-footer">
