@@ -1,4 +1,4 @@
-import type { RectInfo, PinForPage } from '../common/types.js';
+import type { RectInfo, PinForPage, RegionCorner } from '../common/types.js';
 import type { TabCommand } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { isOriginAllowed, type Settings } from '../common/settings.js';
@@ -44,7 +44,7 @@ class ContentApp {
     this.popup = new CommentPopup(this.overlay.layer);
     this.picker = new Picker(this.highlight, this.regionRect, {
       onPickElement: (el) => this.handlePickElement(el),
-      onPickRegion: (rect) => this.handlePickRegion(rect),
+      onPickRegion: (rect, corner) => this.handlePickRegion(rect, corner),
       onCancel: () => this.handleCancel(),
       isOurDom: (el) => this.isOurDom(el),
     });
@@ -108,7 +108,7 @@ class ContentApp {
     return {
       showHighlight: (el) => this.highlight.show(el),
       hideHighlight: () => this.highlight.hide(),
-      showProvisional: (ord, rect) => this.markers.showProvisional(ord, rect),
+      showProvisional: (ord, rect, corner) => this.markers.showProvisional(ord, rect, corner),
       hideProvisional: () => this.markers.hideProvisional(),
       withOverlayHidden: (fn) => withOverlayHidden(fn),
     };
@@ -144,18 +144,18 @@ class ContentApp {
     });
   }
 
-  private handlePickRegion(rect: RectInfo): void {
+  private handlePickRegion(rect: RectInfo, corner: RegionCorner): void {
     const wasOneShot = this.picker.getMode() === 'oneShot';
     this.picker.pause();
     const provisionalOrd = this.markers.count() + 1;
-    this.markers.showProvisional(provisionalOrd, rect);
+    this.markers.showProvisional(provisionalOrd, rect, corner);
     this.popup.open({
       anchorRect: rect,
       selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
       enableSpeech: this.settings.flags.enableWebSpeech,
       onConfirm: async ({ comment, voiceTranscript, attachments }) => {
         await this.runCapture(
-          { kind: 'region', rect, comment, voiceTranscript, attachments },
+          { kind: 'region', rect, corner, comment, voiceTranscript, attachments },
           rect,
         );
         if (wasOneShot) this.stopPicker();
@@ -178,7 +178,11 @@ class ContentApp {
     if (input.kind === 'element') {
       overlay.showHighlight(input.element);
     }
-    overlay.showProvisional(provisionalOrd, toRectInfo(targetRect));
+    overlay.showProvisional(
+      provisionalOrd,
+      toRectInfo(targetRect),
+      input.kind === 'region' ? input.corner : undefined,
+    );
     try {
       const payload = await buildAnnotation(input, this.settings, overlay, provisionalOrd);
       const resp = await sendRequest({ kind: 'annotation:add', payload });

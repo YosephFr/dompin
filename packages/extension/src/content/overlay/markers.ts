@@ -1,4 +1,4 @@
-import type { PinForPage } from '../../common/types.js';
+import type { PinForPage, RegionCorner } from '../../common/types.js';
 import { sameView } from '../../common/view-url.js';
 
 export interface MarkerCallbacks {
@@ -16,6 +16,7 @@ export class MarkerManager {
   private pending: PinForPage[] = [];
   private provisional: HTMLElement | null = null;
   private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
+  private provisionalCorner: RegionCorner = 'tr';
   private currentView = location.href;
 
   constructor(
@@ -44,6 +45,7 @@ export class MarkerManager {
   showProvisional(
     ord: number,
     rect: { x: number; y: number; width: number; height: number },
+    corner: RegionCorner = 'tr',
   ): void {
     if (!this.provisional) {
       const el = document.createElement('div');
@@ -53,6 +55,7 @@ export class MarkerManager {
     }
     this.provisional.textContent = String(ord);
     this.provisionalRect = rect;
+    this.provisionalCorner = corner;
     this.renderProvisional();
   }
 
@@ -66,9 +69,7 @@ export class MarkerManager {
 
   private renderProvisional(): void {
     if (!this.provisional || !this.provisionalRect) return;
-    const r = this.provisionalRect;
-    const x = r.x + r.width - 14;
-    const y = r.y - 8;
+    const { x, y } = markerPos(this.provisionalRect, this.provisionalCorner);
     this.provisional.style.left = '0';
     this.provisional.style.top = '0';
     this.provisional.style.transform = `translate(${x}px, ${y}px)`;
@@ -149,9 +150,8 @@ export class MarkerManager {
       entry.el.style.display = 'flex';
       entry.el.style.left = '0';
       entry.el.style.top = '0';
-      const markerX = rect.x + rect.width - 14;
-      const markerY = rect.y - 8;
-      entry.el.style.transform = `translate(${markerX}px, ${markerY}px)`;
+      const m = markerPos(rect, p.markerCorner ?? 'tr');
+      entry.el.style.transform = `translate(${m.x}px, ${m.y}px)`;
       if (entry.region && p.region) {
         entry.region.style.display = 'block';
         entry.region.style.left = '0';
@@ -187,4 +187,20 @@ export class MarkerManager {
       return null;
     }
   }
+}
+
+/**
+ * Where the 22px numbered marker sits relative to a rect, anchored to the given
+ * corner so it straddles the edge (slightly outside) like the old top-right one.
+ */
+function markerPos(
+  rect: { x: number; y: number; width: number; height: number },
+  corner: RegionCorner,
+): { x: number; y: number } {
+  const left = corner === 'tl' || corner === 'bl';
+  const top = corner === 'tl' || corner === 'tr';
+  return {
+    x: left ? rect.x - 8 : rect.x + rect.width - 14,
+    y: top ? rect.y - 8 : rect.y + rect.height - 14,
+  };
 }

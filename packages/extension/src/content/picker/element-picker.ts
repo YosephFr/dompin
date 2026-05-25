@@ -1,4 +1,4 @@
-import type { RectInfo } from '../../common/types.js';
+import type { RectInfo, RegionCorner } from '../../common/types.js';
 import type { Highlight } from '../overlay/highlight.js';
 import type { RegionRect } from '../overlay/region-rect.js';
 import { applyCrosshairCursor, removeCrosshairCursor } from './cursor-style.js';
@@ -11,7 +11,7 @@ export type PickerMode = 'sticky' | 'oneShot';
 
 export interface PickerCallbacks {
   onPickElement: (el: Element) => void;
-  onPickRegion: (rect: RectInfo) => void;
+  onPickRegion: (rect: RectInfo, corner: RegionCorner) => void;
   onCancel: () => void;
   isOurDom: (el: Element) => boolean;
 }
@@ -152,7 +152,11 @@ export class Picker {
     const h = Math.abs(ev.clientY - start.y);
     this.regionRect.hide();
     if (w < REGION_MIN_SIZE || h < REGION_MIN_SIZE) return;
-    this.cb.onPickRegion({ x, y, width: w, height: h });
+    // Anchor the marker to the corner where the mouse was released.
+    const corner = `${ev.clientY >= start.y ? 'b' : 't'}${
+      ev.clientX >= start.x ? 'r' : 'l'
+    }` as RegionCorner;
+    this.cb.onPickRegion({ x, y, width: w, height: h }, corner);
   };
 
   private onClickCapture = (ev: MouseEvent): void => {

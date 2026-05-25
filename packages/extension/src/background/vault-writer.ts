@@ -1,4 +1,10 @@
-import type { AnnotationPayload, PinForPage, Session, WrittenFile } from '../common/types.js';
+import type {
+  AnnotationPayload,
+  PinForPage,
+  RegionCorner,
+  Session,
+  WrittenFile,
+} from '../common/types.js';
 import { annotationFileBase, sanitizeSegment } from '../common/path-sanitize.js';
 import { ensureWritable } from './vault.js';
 import { createLogger } from '../common/logger.js';
@@ -12,6 +18,8 @@ interface IndexEntry {
   selector: string | null;
   /** Region rect in page/document coordinates (rect at capture + scroll). */
   region: { x: number; y: number; width: number; height: number } | null;
+  /** For region pins: corner of the rect the marker anchors to. */
+  markerCorner?: RegionCorner;
   comment: string;
   pageUrl: string;
   pageTitle: string;
@@ -176,6 +184,7 @@ export async function readSessionPins(session: Session): Promise<PinForPage[]> {
         url: e.pageUrl,
         selector: e.selector,
         region: e.region != null ? { ...e.region } : null,
+        markerCorner: e.markerCorner,
         commentPreview: previewComment(e.comment),
         createdAt: e.createdAt,
       }))
@@ -361,6 +370,7 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
   const region = (j['region'] ?? null) as Record<string, unknown> | null;
   const selector = element ? ((element['selector'] as string | undefined) ?? null) : null;
   let regionInfo: { x: number; y: number; width: number; height: number } | null = null;
+  let markerCorner: RegionCorner | undefined;
   if (region) {
     const rect = (region['rect'] ?? {}) as Record<string, unknown>;
     // Region rects are stored in viewport coords at capture time. Convert to
@@ -373,6 +383,8 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
       width: Number(rect['width']) || 0,
       height: Number(rect['height']) || 0,
     };
+    const c = region['corner'];
+    if (c === 'tl' || c === 'tr' || c === 'bl' || c === 'br') markerCorner = c;
   }
   return {
     ordinal,
@@ -380,6 +392,7 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
     createdAt: Number(j['createdAt'] ?? meta['writtenAt'] ?? 0),
     selector,
     region: regionInfo,
+    markerCorner,
     comment: String(j['comment'] ?? ''),
     pageUrl: String(page['url'] ?? ''),
     pageTitle: String(page['title'] ?? ''),

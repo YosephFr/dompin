@@ -107,6 +107,7 @@ export const OVERLAY_CSS = `
 
 .dp-marker {
   position: fixed;
+  z-index: 2;
   pointer-events: auto;
   cursor: pointer;
   width: 22px;
@@ -150,6 +151,7 @@ export const OVERLAY_CSS = `
 
 .dp-popup {
   position: fixed;
+  z-index: 3;
   pointer-events: auto;
   background: var(--dp-paper);
   color: var(--dp-ink);
@@ -399,6 +401,7 @@ export const OVERLAY_CSS = `
 
 .dp-pinned-region {
   position: fixed;
+  z-index: 1;
   border: 1.5px solid var(--dp-accent);
   background: rgba(10,132,255,0.06);
   pointer-events: none;
