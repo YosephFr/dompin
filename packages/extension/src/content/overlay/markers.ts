@@ -18,6 +18,8 @@ export class MarkerManager {
   private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
   private provisionalCorner: RegionCorner = 'tr';
   private currentView = location.href;
+  private pickerActive = false;
+  private hoveredId: string | null = null;
 
   constructor(
     private layer: HTMLElement,
@@ -39,6 +41,23 @@ export class MarkerManager {
   setView(url: string): void {
     if (url === this.currentView) return;
     this.currentView = url;
+    this.scheduleRender();
+  }
+
+  /**
+   * Region boxes are drawn only while the picker is on. With the picker off the
+   * page stays clean — just the numbered dots — and a pin's box appears only
+   * while the pointer hovers its dot.
+   */
+  setPickerActive(active: boolean): void {
+    if (this.pickerActive === active) return;
+    this.pickerActive = active;
+    this.scheduleRender();
+  }
+
+  private setHovered(id: string | null): void {
+    if (this.hoveredId === id) return;
+    this.hoveredId = id;
     this.scheduleRender();
   }
 
@@ -95,6 +114,8 @@ export class MarkerManager {
         el.textContent = String(p.ordinal);
         el.dataset.id = p.id;
         el.addEventListener('click', (ev) => this.cb.onMarkerClick(p.id, ev));
+        el.addEventListener('mouseenter', () => this.setHovered(p.id));
+        el.addEventListener('mouseleave', () => this.setHovered(null));
         this.layer.appendChild(el);
         let region: HTMLElement | null = null;
         if (p.region) {
@@ -153,7 +174,8 @@ export class MarkerManager {
       const m = markerPos(rect, p.markerCorner ?? 'tr');
       entry.el.style.transform = `translate(${m.x}px, ${m.y}px)`;
       if (entry.region && p.region) {
-        entry.region.style.display = 'block';
+        const showBox = this.pickerActive || this.hoveredId === p.id;
+        entry.region.style.display = showBox ? 'block' : 'none';
         entry.region.style.left = '0';
         entry.region.style.top = '0';
         entry.region.style.transform = `translate(${rect.x}px, ${rect.y}px)`;

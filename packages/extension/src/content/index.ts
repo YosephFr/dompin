@@ -32,6 +32,7 @@ class ContentApp {
   private currentUrl: string;
   private active = true;
   private lastRightClickedEl: Element | null = null;
+  private urlPollId: number | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -87,6 +88,8 @@ class ContentApp {
   }
 
   private broadcastPickerState(active: boolean, mode?: 'sticky' | 'oneShot'): void {
+    // Region boxes follow the picker: shown while it's on, hidden (dots only) when off.
+    this.markers.setPickerActive(active);
     void sendRequest({
       kind: 'picker:state-broadcast',
       active,
@@ -331,11 +334,21 @@ class ContentApp {
       (history as unknown as { __dompinPatched: boolean }).__dompinPatched = true;
     }
     addEventListener('dompin:locationchange', checkUrl);
+    addEventListener('hashchange', checkUrl);
+    // Safety net for SPAs whose view changes our history patch and the events
+    // above don't catch — e.g. a router that grabbed pushState before we patched
+    // it, or query-only navigations. Cheap string compare; only does work when
+    // the URL actually changed, so stale pins from another view can't linger.
+    this.urlPollId = window.setInterval(checkUrl, 400);
   }
 
   private shutdown(): void {
     if (!this.active) return;
     this.active = false;
+    if (this.urlPollId != null) {
+      clearInterval(this.urlPollId);
+      this.urlPollId = null;
+    }
     this.picker.stop();
     this.popup.destroy();
     this.markers.destroy();

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] — 2026-05-25
+
+### Changed
+
+- **Region boxes stay out of the way.** The blue box around a region pin is now drawn only while the picker is on. With the picker off, the page shows just the numbered dots; hover a dot to reveal that pin's box. So right after you save a region note and the picker is off, only the number remains, and the box comes back on demand. Element pins were already dots-only.
+
+### Fixed
+
+- **Pins from another view no longer linger after navigating.** On single-page apps that switch views by changing the URL in ways the history hooks didn't catch (for example `?v=…` query routes), the on-page markers for the previous view stayed visible even though the side panel had already moved on. The content script now also listens for `hashchange` and polls the URL as a safety net, so markers re-scope to the current view on any navigation — full load, SPA route, hash, or query-only change.
+
 ## [0.4.3] — 2026-05-25
 
 ### Changed
@@ -178,6 +188,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.4]: https://github.com/YosephFr/dompin/releases/tag/v0.4.4
 [0.4.3]: https://github.com/YosephFr/dompin/releases/tag/v0.4.3
 [0.4.2]: https://github.com/YosephFr/dompin/releases/tag/v0.4.2
 [0.4.1]: https://github.com/YosephFr/dompin/releases/tag/v0.4.1
