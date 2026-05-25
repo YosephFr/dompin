@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-05-25
+
+### Fixed
+
+- **Voice transcription no longer fails with "Invalid audio payload."** The audio decoder rejected the recorder's `audio/webm;codecs=opus` data URL because its hand-rolled parser couldn't handle the `;codecs=…` MIME parameter. It now decodes the data URL with `fetch().blob()` (the same path screenshots use), so transcription works. This also unblocks **saving voice-only annotations**: when the transcript filled the comment box, a failed transcription left it empty and the **Pin** button stayed disabled — fixing the decode lets the transcript land, which re-enables saving. (The bug was dormant until 0.4.0 made the microphone actually record.)
+
 ## [0.4.0] — 2026-05-25
 
 ### Added

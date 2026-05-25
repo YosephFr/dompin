@@ -30,7 +30,7 @@ async function transcribeWithOpenAi(
 
   const model = settings.transcription.openAiModel.trim() || 'gpt-4o-transcribe';
   const form = new FormData();
-  form.append('file', dataUrlToBlob(input.audioDataUrl, input.mimeType), input.fileName);
+  form.append('file', await dataUrlToBlob(input.audioDataUrl, input.mimeType), input.fileName);
   form.append('model', model);
   form.append('response_format', 'json');
   const language = settings.transcription.languageCode.trim();
@@ -59,7 +59,7 @@ async function transcribeWithElevenLabs(
   const model = settings.transcription.elevenLabsModel.trim() || 'scribe_v2';
   const form = new FormData();
   form.append('model_id', model);
-  form.append('file', dataUrlToBlob(input.audioDataUrl, input.mimeType), input.fileName);
+  form.append('file', await dataUrlToBlob(input.audioDataUrl, input.mimeType), input.fileName);
   const language = settings.transcription.languageCode.trim();
   if (language) form.append('language_code', language);
 
@@ -76,18 +76,15 @@ async function transcribeWithElevenLabs(
   return { text, provider: 'elevenlabs', model };
 }
 
-function dataUrlToBlob(dataUrl: string, fallbackType: string): Blob {
-  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl);
-  if (!match) throw new Error('Invalid audio payload.');
-  const mimeType = match[1] || fallbackType || 'audio/webm';
-  const isBase64 = Boolean(match[2]);
-  const body = match[3] ?? '';
-  const binary = isBase64 ? atob(body) : decodeURIComponent(body);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mimeType });
+async function dataUrlToBlob(dataUrl: string, fallbackType: string): Promise<Blob> {
+  // Let the platform decode the data URL. This correctly handles MIME types that
+  // carry parameters (e.g. `audio/webm;codecs=opus`, which MediaRecorder always
+  // produces) — a hand-rolled regex tripped over the `;codecs=…` segment and
+  // rejected the audio. Mirrors how vault-writer turns screenshot data URLs into
+  // blobs.
+  const blob = await fetch(dataUrl).then((r) => r.blob());
+  if (blob.type && !blob.type.startsWith('text/plain')) return blob;
+  return new Blob([blob], { type: fallbackType || 'audio/webm' });
 }
 
 async function responseError(resp: Response, fallback: string): Promise<string> {

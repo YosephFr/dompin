@@ -1,6 +1,6 @@
 {
   "name": "@dompin/extension",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Chrome extension for pinning and annotating page elements; writes annotations to a local folder you choose.",
   "license": "MIT",
