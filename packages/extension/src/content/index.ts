@@ -99,6 +99,7 @@ class ContentApp {
   }
 
   private async refreshMarkers(): Promise<void> {
+    this.markers.setView(location.href);
     const r = await sendRequest<{ pins: PinForPage[] }>({ kind: 'pins:for-tab' });
     if (r.ok) this.markers.update(r.pins);
   }
@@ -126,8 +127,11 @@ class ContentApp {
       anchorRect,
       selectorPreview,
       enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript }) => {
-        await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
+      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
+        await this.runCapture(
+          { kind: 'element', element: el, comment, voiceTranscript, attachments },
+          rect,
+        );
         if (wasOneShot) this.stopPicker();
         else this.picker.resume();
       },
@@ -149,8 +153,11 @@ class ContentApp {
       anchorRect: rect,
       selectorPreview: `region · ${Math.round(rect.width)} × ${Math.round(rect.height)}`,
       enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript }) => {
-        await this.runCapture({ kind: 'region', rect, comment, voiceTranscript }, rect);
+      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
+        await this.runCapture(
+          { kind: 'region', rect, comment, voiceTranscript, attachments },
+          rect,
+        );
         if (wasOneShot) this.stopPicker();
         else this.picker.resume();
       },
@@ -197,8 +204,11 @@ class ContentApp {
       anchorRect,
       selectorPreview,
       enableSpeech: this.settings.flags.enableWebSpeech,
-      onConfirm: async ({ comment, voiceTranscript }) => {
-        await this.runCapture({ kind: 'element', element: el, comment, voiceTranscript }, rect);
+      onConfirm: async ({ comment, voiceTranscript, attachments }) => {
+        await this.runCapture(
+          { kind: 'element', element: el, comment, voiceTranscript, attachments },
+          rect,
+        );
       },
       onCancel: () => {
         this.highlight.hide();
@@ -293,7 +303,11 @@ class ContentApp {
     const checkUrl = () => {
       if (location.href !== this.currentUrl) {
         this.currentUrl = location.href;
+        // Scope markers to the new view immediately, then refetch. A second
+        // delayed refresh catches SPA views whose content mounts a beat later.
+        this.markers.setView(this.currentUrl);
         void this.refreshMarkers();
+        window.setTimeout(() => void this.refreshMarkers(), 450);
       }
     };
     addEventListener('popstate', checkUrl);

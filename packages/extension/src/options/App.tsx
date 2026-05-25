@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import type { Settings } from '../common/settings.js';
+import type { Settings, TranscriptionProvider } from '../common/settings.js';
 import type { VaultStatus } from '../common/types.js';
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
@@ -19,8 +19,8 @@ const FLAGS: { key: FlagKey; label: string; description: string }[] = [
   },
   {
     key: 'enableWebSpeech',
-    label: 'Voice memos (Web Speech API)',
-    description: 'Lets you dictate the comment instead of typing. Voice input stays on-device.',
+    label: 'Audio transcription',
+    description: 'Lets you record a note and insert the provider transcript into the pin comment.',
   },
   {
     key: 'enableReactFiber',
@@ -156,6 +156,20 @@ export function App(): JSX.Element {
     );
   }
 
+  function setTranscription<K extends keyof Settings['transcription']>(
+    key: K,
+    value: Settings['transcription'][K],
+  ): void {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            transcription: { ...d.transcription, [key]: value },
+          }
+        : d,
+    );
+  }
+
   async function saveSettings(): Promise<void> {
     if (!draft) return;
     setSavingSettings(true);
@@ -275,6 +289,7 @@ export function App(): JSX.Element {
   // settings
   const vault = state.vault;
   const flags = draft?.flags ?? state.settings.flags;
+  const transcription = draft?.transcription ?? state.settings.transcription;
 
   return (
     <div className="page">
@@ -360,6 +375,83 @@ export function App(): JSX.Element {
         ))}
       </section>
 
+      <section className="section">
+        <div className="section-head">
+          <h2>Audio transcription</h2>
+        </div>
+        <p className="section-hint">
+          Audio is recorded in the browser, sent directly from the extension to the selected
+          provider, and inserted into the pin text before you submit it.
+        </p>
+        <label className="field">
+          <span className="field-label">Provider</span>
+          <select
+            className="select"
+            value={transcription.provider}
+            onChange={(e) => setTranscription('provider', e.target.value as TranscriptionProvider)}
+          >
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </label>
+        <div className="field-grid">
+          <label className="field">
+            <span className="field-label">ElevenLabs API key</span>
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={transcription.elevenLabsApiKey}
+              onChange={(e) => setTranscription('elevenLabsApiKey', e.target.value)}
+              placeholder="xi-..."
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">ElevenLabs model</span>
+            <input
+              className="input"
+              type="text"
+              value={transcription.elevenLabsModel}
+              onChange={(e) => setTranscription('elevenLabsModel', e.target.value)}
+              placeholder="scribe_v2"
+            />
+          </label>
+        </div>
+        <div className="field-grid">
+          <label className="field">
+            <span className="field-label">OpenAI API key</span>
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={transcription.openAiApiKey}
+              onChange={(e) => setTranscription('openAiApiKey', e.target.value)}
+              placeholder="sk-..."
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">OpenAI model</span>
+            <input
+              className="input"
+              type="text"
+              value={transcription.openAiModel}
+              onChange={(e) => setTranscription('openAiModel', e.target.value)}
+              placeholder="gpt-4o-transcribe"
+            />
+          </label>
+        </div>
+        <label className="field field-small">
+          <span className="field-label">Language code</span>
+          <input
+            className="input"
+            type="text"
+            value={transcription.languageCode}
+            onChange={(e) => setTranscription('languageCode', e.target.value)}
+            placeholder="es"
+          />
+        </label>
+      </section>
+
       <footer className="page-footer">
         {saveError ? <span className="status-error">{saveError}</span> : null}
         <span className="footer-spacer" />
@@ -409,6 +501,9 @@ function sameSettings(a: Settings, b: Settings): boolean {
   if (!sameAllowlist(a.allowlist, b.allowlist)) return false;
   for (const k of Object.keys(a.flags) as FlagKey[]) {
     if (a.flags[k] !== b.flags[k]) return false;
+  }
+  for (const k of Object.keys(a.transcription) as Array<keyof Settings['transcription']>) {
+    if (a.transcription[k] !== b.transcription[k]) return false;
   }
   return true;
 }

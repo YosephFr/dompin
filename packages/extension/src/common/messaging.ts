@@ -31,6 +31,10 @@ export type RequestMessage =
   | { kind: 'capture-viewport' }
   | { kind: 'capture-viewport-clean' }
   | { kind: 'capture-element'; rect: RectInfo; dpr: number; padding?: number }
+  | { kind: 'audio:transcribe'; audioDataUrl: string; mimeType: string; fileName: string }
+  | { kind: 'audio:record-start' }
+  | { kind: 'audio:record-stop' }
+  | { kind: 'audio:record-cancel' }
   | { kind: 'pins:for-tab'; tabId?: number }
   | { kind: 'toggle-picker'; mode?: 'sticky' | 'oneShot' }
   | { kind: 'picker:state-broadcast'; active: boolean; mode?: 'sticky' | 'oneShot' }
@@ -52,6 +56,7 @@ export type AnnotationAddResp = Resp<{
   files: { relativePath: string; bytes: number }[];
 }>;
 export type CaptureResp = Resp<{ dataUrl: string }>;
+export type TranscriptionResp = Resp<{ text: string; provider: string; model: string }>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 
 export type TabCommand =

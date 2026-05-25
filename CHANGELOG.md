@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-05-25
+
+### Added
+
+- **Per-view markers.** A session can span several pages or single-page-app routes. Each pin now remembers the URL it was captured on, and DOMPin shows only the pins that belong to the view currently on screen — both the on-page markers and the side-panel list. Pin the home page, walk into a menu or sub-section, and the home pins step aside; come back and they reappear. Works for full page loads and for SPA route changes (the URL is tracked through `pushState`/`replaceState`/`popstate`). View identity ignores tracking params like `utm_*` so returning to a view doesn't lose its pins.
+
+### Fixed
+
+- **Region pins land where you drew them.** The box and its number badge for a dragged region used to jump to the top-left corner (their position was never persisted) and didn't follow the page when you scrolled. Region coordinates are now stored in document space, so the marker sits exactly on the region you selected and tracks the content as you scroll or reload.
+- **Microphone works on any site.** Voice recording used to run inside the page, so it failed silently on sites whose `Permissions-Policy` blocks the microphone and on insecure (`http`) pages, and the permission prompt was confusing. Recording now happens in an offscreen document at the extension's own origin, which is immune to the page's policy. The first time you record, DOMPin asks for microphone access once in a small window; after that it records silently everywhere. The captured audio goes offscreen → background → provider and never enters the page you're annotating.
+
+### Changed
+
+- New `offscreen` permission, used solely to capture microphone audio for transcription.
+
 ## [0.3.3] — 2026-05-06
 
 ### Changed

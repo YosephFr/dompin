@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { PinForPage, Session, SessionListItem, VaultStatus } from '../common/types.js';
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
+import { sameView } from '../common/view-url.js';
 import { requestRootPermission, saveRootHandle } from '../common/vault-handle.js';
 import { I18nProvider, localizeError, resolveLocale, useT } from '../common/i18n/index.js';
 import type { LocalePreference, Settings, ThemePreference } from '../common/settings.js';
@@ -68,7 +69,10 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     void bootstrap();
     const onTabActivated = () => void onTabChange();
     const onTabUpdated = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
-      if (info.status === 'complete' && tabId === originRef.current.tabId) {
+      if (tabId !== originRef.current.tabId) return;
+      // `status: complete` covers hard loads; `info.url` covers SPA route
+      // changes that swap the view without a full reload.
+      if (info.status === 'complete' || typeof info.url === 'string') {
         void onTabChange();
       }
     };
@@ -477,6 +481,9 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   }
 
   const vault = state.vault;
+  // Markers and this list are scoped per view: only show pins captured on the
+  // URL currently in the tab. Falls back to all pins if the tab URL is unknown.
+  const pagePins = origin.url ? pins.filter((p) => sameView(p.url, origin.url)) : pins;
   const showWizard = !vault.configured || showOnboardingForced;
   const pickerState: PickerState = pickerOn ? 'on' : 'off';
   const sessionDraftOpen = newDraft !== null || renameDraft !== null;
@@ -551,7 +558,7 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
               />
             ) : null}
             <PinListCard
-              pins={pins}
+              pins={pagePins}
               editingId={editingId}
               editDraft={editDraft}
               onEditDraftChange={setEditDraft}

@@ -39,6 +39,15 @@ export default defineConfig({
   build: {
     sourcemap: true,
     target: 'esnext',
+    rollupOptions: {
+      // Extra extension pages that aren't referenced from the manifest: the
+      // offscreen recorder document and the one-time mic permission window.
+      // CRXJS keeps HTML entry points at their source-relative path in dist.
+      input: {
+        offscreen: path.resolve(ROOT, 'src/offscreen/offscreen.html'),
+        mic: path.resolve(ROOT, 'src/offscreen/mic.html'),
+      },
+    },
   },
   server: {
     port: 5173,

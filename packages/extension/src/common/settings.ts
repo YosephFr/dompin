@@ -1,5 +1,6 @@
 export type ThemePreference = 'auto' | 'light' | 'dark';
 export type LocalePreference = 'auto' | 'en' | 'es';
+export type TranscriptionProvider = 'elevenlabs' | 'openai';
 
 export interface Settings {
   schemaVersion: 2;
@@ -12,6 +13,14 @@ export interface Settings {
   preferences: {
     theme: ThemePreference;
     locale: LocalePreference;
+  };
+  transcription: {
+    provider: TranscriptionProvider;
+    elevenLabsApiKey: string;
+    elevenLabsModel: string;
+    openAiApiKey: string;
+    openAiModel: string;
+    languageCode: string;
   };
 }
 
@@ -27,15 +36,24 @@ export const DEFAULT_SETTINGS: Settings = {
     theme: 'auto',
     locale: 'auto',
   },
+  transcription: {
+    provider: 'elevenlabs',
+    elevenLabsApiKey: '',
+    elevenLabsModel: 'scribe_v2',
+    openAiApiKey: '',
+    openAiModel: 'gpt-4o-transcribe',
+    languageCode: '',
+  },
 };
 
 export function mergeSettings(partial: Partial<Settings> | undefined): Settings {
   const p = partial ?? {};
   const flags = { ...DEFAULT_SETTINGS.flags, ...(p.flags ?? {}) };
   const preferences = { ...DEFAULT_SETTINGS.preferences, ...(p.preferences ?? {}) };
+  const transcription = { ...DEFAULT_SETTINGS.transcription, ...(p.transcription ?? {}) };
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 2, allowlist, flags, preferences };
+  return { schemaVersion: 2, allowlist, flags, preferences, transcription };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {

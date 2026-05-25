@@ -6,15 +6,16 @@
   <img src="docs/assets/dompin-hero.png" alt="DOMPin side panel pinning the Google logo with an inline comment popup" width="960" />
 </p>
 
-DOMPin is a Chrome extension that lets you click any element on any web page, drop a comment, and capture the full DOM context — selector, XPath, outerHTML preview, computed styles, viewport and zoomed screenshots, React Fiber info, console state — straight into a folder you choose. Hand the folder to Claude Code, Cursor, or any tool that reads local files. No server, no port to manage.
+DOMPin is a Chrome extension that lets you click any element or drag a custom region on any web page, drop a comment, and capture the full DOM context — selector, XPath, outerHTML preview, computed styles, viewport and zoomed screenshots, React Fiber info, console state, attachments, and optional audio transcription — straight into a folder you choose. Hand the folder to Claude Code, Cursor, or any tool that reads local files. No server, no port to manage.
 
 ## How it works
 
 1. Install the extension. The first time it loads, the side panel walks you through picking a folder.
 2. Click the DOMPin icon to open the side panel. Start a named session for the current tab — that becomes a subfolder where this round of annotations will land.
-3. Hit **Start picking**, click any element on the page, type a comment, press Enter. Chain as many as you want — the picker stays on until you stop it.
-4. Need a quick one-off without leaving your flow? Hit `⌘⇧.` (Mac) / `Ctrl⇧.` (Win/Linux) for a single-shot pick that auto-stops, or right-click any element and choose **Annotate element with DOMPin** to capture transient UI like dropdowns and popovers without dismissing them.
-5. Open the vault folder in your editor and let your AI agent work from it.
+3. Hit **Start picking**, click any element on the page, type a comment, press Enter. To mark a custom area instead of a DOM node, click and drag a rectangle over the region you want. Chain as many pins as you want — the picker stays on until you stop it.
+4. Use the microphone button to record audio and insert a provider transcript into the visible note, or use the attachment button to add screenshots and files to the pin before sending.
+5. Need a quick one-off without leaving your flow? Hit `⌘⇧.` (Mac) / `Ctrl⇧.` (Win/Linux) for a single-shot pick that auto-stops, or right-click any element and choose **Annotate element with DOMPin** to capture transient UI like dropdowns and popovers without dismissing them.
+6. Open the vault folder in your editor and let your AI agent work from it.
 
 ## File layout
 
@@ -27,13 +28,15 @@ DOMPin is a Chrome extension that lets you click any element on any web page, dr
       01.element.png
       01.viewport.png
       01.json
+      01.attachments/
+        screenshot.png
       02.md
       02.element.png
       02.viewport.png
       02.json
 ```
 
-Each `NN.md` contains your comment, the picked element data, and links to the screenshots. `NN.element.png` is a clean crop of the picked element with padding. `NN.viewport.png` is the full viewport with all annotation markers, the highlight, and the element infobox visible — so the agent can see exactly what you saw. `NN.json` carries the full structured payload for tools that prefer to parse rather than read prose. See [docs/file-schema.md](docs/file-schema.md) for the full specification.
+Each `NN.md` contains your comment, optional voice transcript, attachment links, the picked element or region data, and links to the screenshots. `NN.element.png` is a clean crop of the picked element or custom region with padding. `NN.viewport.png` is the full viewport with all annotation markers, the highlight, and the element infobox visible — so the agent can see exactly what you saw. `NN.json` carries the full structured payload for tools that prefer to parse rather than read prose. See [docs/file-schema.md](docs/file-schema.md) for the full specification.
 
 ## Sessions
 
@@ -41,17 +44,21 @@ Sessions are explicit and named. The side panel shows the current session for th
 
 Recent sessions for the same domain are listed below for quick context, and pins on the current page can be edited or deleted right from the side panel.
 
+Markers are scoped to the view you captured them on. A session can span several pages or SPA routes; when you move to a different view its pins step aside — both the on-page markers and the side-panel list — and they reappear the moment you return. So pinning the home page and then walking through a menu or sub-section keeps each view's annotations to itself.
+
 ## Picker modes
 
-- **Sticky** (default, from the side panel button): stays on across multiple pins until you stop it. Best for a focused review of several elements in a row.
+- **Sticky** (default, from the side panel button): stays on across multiple pins until you stop it. Best for a focused review of several elements or regions in a row.
 - **One-shot** (`⌘⇧.` / `Ctrl⇧.`): grabs a single element, then auto-stops. Best for an isolated capture without breaking your reading flow.
 - **Right-click context menu**: pick **Annotate element with DOMPin** on any element. The comment popup opens for that exact element without dismissing whatever was already on screen — invaluable for hover dropdowns, modals, and popovers that disappear when you click outside them.
+
+Click and drag while the picker is active to draw a dashed rectangular region. Region pins capture the crop and include the visible elements whose centers fall inside the rectangle.
 
 All three require an active session for the tab. If there isn't one, the side panel opens and the Session card flashes so you know where to start.
 
 ## Privacy
 
-Everything stays on your machine. DOMPin asks for read-write access to one folder you pick — nothing else. No telemetry, no remote calls, no hidden network traffic. An allowlist controls which sites the picker is available on.
+Annotations and attachments stay in the folder you pick. DOMPin asks for read-write access to that folder — nothing else. There is no telemetry and no DOMPin server. If you enable audio transcription and add an OpenAI or ElevenLabs API key, recorded audio is sent directly from the extension to the selected provider for transcription. Recording runs at the extension's own origin, so the first time you use it DOMPin asks for microphone access once — after that it works on any site without re-prompting, and the audio never touches the page you're annotating. An allowlist controls which sites the picker is available on.
 
 ## Install
 

@@ -26,6 +26,8 @@ import { sendTabCommand, sendTabCommandWithInject } from './tab-bridge.js';
 import { captureElement, captureViewport } from './screenshot.js';
 import { gatePickerBySession } from './picker-gate.js';
 import { checkPageAccess } from './page-access.js';
+import { transcribeAudio } from './transcription.js';
+import { cancelRecording, startRecording, stopRecording } from './audio-recorder.js';
 
 const log = createLogger('router');
 
@@ -171,6 +173,45 @@ async function handle(
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
       }
+    }
+    case 'audio:transcribe': {
+      const settings = await loadSettings();
+      try {
+        const result = await transcribeAudio(
+          {
+            audioDataUrl: req.audioDataUrl,
+            mimeType: req.mimeType,
+            fileName: req.fileName,
+          },
+          settings,
+        );
+        return ok({ text: result.text, provider: result.provider, model: result.model });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+    case 'audio:record-start': {
+      const r = await startRecording();
+      return r.ok ? ok({}) : err(r.error);
+    }
+    case 'audio:record-stop': {
+      const r = await stopRecording();
+      if (!r.ok) return err(r.error);
+      if ('discarded' in r) return ok({ discarded: true });
+      try {
+        const settings = await loadSettings();
+        const result = await transcribeAudio(
+          { audioDataUrl: r.audioDataUrl, mimeType: r.mimeType, fileName: r.fileName },
+          settings,
+        );
+        return ok({ text: result.text, provider: result.provider, model: result.model });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+    case 'audio:record-cancel': {
+      await cancelRecording();
+      return ok({});
     }
     case 'pins:for-tab': {
       const tabId = await resolveTabId(req.tabId, sender);

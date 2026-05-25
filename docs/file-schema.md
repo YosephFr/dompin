@@ -13,6 +13,8 @@ This document is the integration contract between DOMPin and any tool that reads
       01.element.png
       01.viewport.png
       01.json
+      01.attachments/
+        screenshot.png
       02.md
       02.element.png
       02.viewport.png
@@ -64,22 +66,24 @@ The README is meant to be read by humans and by AI agents alike. It is the first
 
 ## Annotation files
 
-Every annotation produces four files. The filename ordinal is two-digit, zero-padded, and increments per session: `01`, `02`, …, `99`, `100`.
+Every annotation produces four base files. The filename ordinal is two-digit, zero-padded, and increments per session: `01`, `02`, …, `99`, `100`. If the user adds files to a pin, the annotation also gets an `NN.attachments/` folder.
 
 ### `NN.md`
 
 Human-readable Markdown. Authoritative for the comment text and for reference links.
 
-Each `NN.md` opens with an `H1` line containing the ordinal and the session name, followed by a metadata block (when, page, selector). After that, a `## Comment` section carries the user's full comment text. Then come the two screenshots, the element details (tag, classes, id, XPath, role, aria-label, React info, outer HTML preview), the computed styles subset, and any console or network excerpts that were captured.
+Each `NN.md` opens with an `H1` line containing the ordinal and the session name, followed by a metadata block (when, page, selector). After that, a `## Comment` section carries the user's full comment text. Then come any voice transcript and attachments, the two screenshots, the element details (tag, classes, id, XPath, role, aria-label, React info, outer HTML preview), the computed styles subset, and any console or network excerpts that were captured.
 
 The exact wording and ordering of section headers may evolve between versions, but the file always contains:
 
 1. A title with the ordinal and the session name.
 2. A `## Comment` section with the user's full comment.
-3. Inline references to `NN.viewport.png` and `NN.element.png` under `## Screenshots`.
-4. A `## Element` (or `## Region`) section with the structural identifiers.
-5. A `## Computed styles` section when computed style data is present.
-6. Any `## Console` or `## Network failures` excerpts that were captured.
+3. A `## Voice transcript` section when audio transcription was used.
+4. A `## Attachments` section when files were attached.
+5. Inline references to `NN.viewport.png` and `NN.element.png` under `## Screenshots`.
+6. A `## Element` (or `## Region`) section with the structural identifiers.
+7. A `## Computed styles` section when computed style data is present.
+8. Any `## Console` or `## Network failures` excerpts that were captured.
 
 ### `NN.viewport.png` — full viewport with overlay
 
@@ -134,6 +138,16 @@ Full machine-readable payload. Use this when you want to parse rather than read 
     "scrollAncestorSelector": null
   },
   "region": null,
+  "attachments": [
+    {
+      "id": "att_a1b2",
+      "name": "screenshot.png",
+      "mimeType": "image/png",
+      "size": 184230,
+      "path": "./01.attachments/screenshot.png",
+      "bytes": 184230
+    }
+  ],
   "screenshots": {
     "viewport": "./01.viewport.png",
     "element": "./01.element.png"
@@ -152,9 +166,19 @@ The TypeScript types backing this payload live in `packages/extension/src/common
 When the user drags a region instead of clicking an element:
 
 - `element` is `null` in `NN.json`.
-- `region` has the form `{ "rect": { "x": …, "y": …, "width": …, "height": … } }`.
-- `NN.md` lists the region rectangle in place of the element identifiers.
+- `region` has the form `{ "rect": { "x": …, "y": …, "width": …, "height": … }, "elements": [...] }`.
+- `region.elements` contains up to 24 visible elements whose centers fall inside the rectangle, captured with the same selector, XPath, style, and React metadata shape used for element pins.
+- `NN.md` lists the region rectangle and the contained element selectors in place of the single element identifiers.
 - `NN.element.png` is the cropped rectangle from a clean viewport (no overlay).
+
+## Attachments
+
+When files are added from the comment popup:
+
+- Files are written into `NN.attachments/` inside the session folder.
+- `NN.md` links each file under `## Attachments`.
+- `NN.json` lists each attachment with `id`, original `name`, `mimeType`, original `size`, relative `path`, and written `bytes`.
+- Attachment filenames are sanitized and de-duplicated within the annotation folder.
 
 ## Sanitization rules
 

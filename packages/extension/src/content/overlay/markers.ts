@@ -1,4 +1,5 @@
 import type { PinForPage } from '../../common/types.js';
+import { sameView } from '../../common/view-url.js';
 
 export interface MarkerCallbacks {
   onMarkerClick: (id: string, ev: MouseEvent) => void;
@@ -15,6 +16,7 @@ export class MarkerManager {
   private pending: PinForPage[] = [];
   private provisional: HTMLElement | null = null;
   private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
+  private currentView = location.href;
 
   constructor(
     private layer: HTMLElement,
@@ -26,6 +28,17 @@ export class MarkerManager {
 
   count(): number {
     return this.markers.size;
+  }
+
+  /**
+   * Tell the manager which view (URL) is on screen. Markers for pins captured on
+   * other views are kept in the map (so ordinals stay session-global) but hidden
+   * until the user navigates back to their view.
+   */
+  setView(url: string): void {
+    if (url === this.currentView) return;
+    this.currentView = url;
+    this.scheduleRender();
   }
 
   showProvisional(
@@ -127,7 +140,7 @@ export class MarkerManager {
     for (const p of this.pending) {
       const entry = this.markers.get(p.id);
       if (!entry) continue;
-      const rect = this.resolveRect(p);
+      const rect = sameView(p.url, this.currentView) ? this.resolveRect(p) : null;
       if (!rect) {
         entry.el.style.display = 'none';
         if (entry.region) entry.region.style.display = 'none';
@@ -153,7 +166,16 @@ export class MarkerManager {
   private resolveRect(
     p: PinForPage,
   ): { x: number; y: number; width: number; height: number } | null {
-    if (p.region) return p.region;
+    if (p.region) {
+      // Region rect is stored in page/document space; convert to viewport coords
+      // so the box and its number badge track the content as the page scrolls.
+      return {
+        x: p.region.x - window.scrollX,
+        y: p.region.y - window.scrollY,
+        width: p.region.width,
+        height: p.region.height,
+      };
+    }
     if (!p.selector) return null;
     try {
       const el = document.querySelector(p.selector);

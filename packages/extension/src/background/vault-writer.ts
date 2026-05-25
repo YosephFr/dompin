@@ -1,5 +1,5 @@
 import type { AnnotationPayload, PinForPage, Session, WrittenFile } from '../common/types.js';
-import { annotationFileBase } from '../common/path-sanitize.js';
+import { annotationFileBase, sanitizeSegment } from '../common/path-sanitize.js';
 import { ensureWritable } from './vault.js';
 import { createLogger } from '../common/logger.js';
 
@@ -10,7 +10,8 @@ interface IndexEntry {
   id: string;
   createdAt: number;
   selector: string | null;
-  region: { width: number; height: number } | null;
+  /** Region rect in page/document coordinates (rect at capture + scroll). */
+  region: { x: number; y: number; width: number; height: number } | null;
   comment: string;
   pageUrl: string;
   pageTitle: string;
@@ -48,13 +49,29 @@ export async function writeAnnotation(
       files.push({ relativePath: relPath(session, elementName), bytes });
     }
 
+    const attachmentResult = await writeAttachments(dir, session, base, payload);
+    const payloadWithAttachments = attachmentResult.payload;
+    files.push(...attachmentResult.files);
+
     const jsonName = `${base}.json`;
-    const jsonStr = serializePayloadJson(session, payload, ordinal, viewportName, elementName);
+    const jsonStr = serializePayloadJson(
+      session,
+      payloadWithAttachments,
+      ordinal,
+      viewportName,
+      elementName,
+    );
     const jsonBytes = await writeText(dir, jsonName, jsonStr);
     files.push({ relativePath: relPath(session, jsonName), bytes: jsonBytes });
 
     const mdName = `${base}.md`;
-    const md = renderAnnotationMarkdown(session, payload, ordinal, viewportName, elementName);
+    const md = renderAnnotationMarkdown(
+      session,
+      payloadWithAttachments,
+      ordinal,
+      viewportName,
+      elementName,
+    );
     const mdBytes = await writeText(dir, mdName, md);
     files.push({ relativePath: relPath(session, mdName), bytes: mdBytes });
 
@@ -82,6 +99,7 @@ export async function deleteAnnotation(
       ]) {
         await safeRemove(dir, name);
       }
+      await safeRemove(dir, `${base}.attachments`, true);
       await regenerateSessionReadmeFromDir(session, dir);
       return { ok: true as const };
     } catch (e) {
@@ -155,9 +173,9 @@ export async function readSessionPins(session: Session): Promise<PinForPage[]> {
       .map<PinForPage>((e) => ({
         id: e.id,
         ordinal: e.ordinal,
+        url: e.pageUrl,
         selector: e.selector,
-        region:
-          e.region != null ? { x: 0, y: 0, width: e.region.width, height: e.region.height } : null,
+        region: e.region != null ? { ...e.region } : null,
         commentPreview: previewComment(e.comment),
         createdAt: e.createdAt,
       }))
@@ -244,9 +262,69 @@ async function writeText(
   }
 }
 
-async function safeRemove(dir: FileSystemDirectoryHandle, name: string): Promise<void> {
+async function writeAttachments(
+  dir: FileSystemDirectoryHandle,
+  session: Session,
+  base: string,
+  payload: AnnotationPayload,
+): Promise<{ payload: AnnotationPayload; files: WrittenFile[] }> {
+  const attachments = payload.attachments ?? [];
+  if (!attachments.length) return { payload, files: [] };
+
+  const files: WrittenFile[] = [];
+  const attachmentDirName = `${base}.attachments`;
+  const attachmentDir = await dir.getDirectoryHandle(attachmentDirName, { create: true });
+  const used = new Set<string>();
+  const written = [];
+
+  for (const attachment of attachments) {
+    if (!attachment.dataUrl) {
+      written.push(attachment);
+      continue;
+    }
+    const safeName = uniqueAttachmentName(attachment.name, used);
+    const bytes = await writeBlob(attachmentDir, safeName, attachment.dataUrl);
+    files.push({
+      relativePath: relPath(session, `${attachmentDirName}/${safeName}`),
+      bytes,
+    });
+    written.push({
+      id: attachment.id,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      path: `./${attachmentDirName}/${safeName}`,
+      bytes,
+    });
+  }
+
+  return { payload: { ...payload, attachments: written }, files };
+}
+
+function uniqueAttachmentName(name: string, used: Set<string>): string {
+  const fallback = `attachment-${used.size + 1}`;
+  const safe = sanitizeSegment(name, fallback);
+  if (!used.has(safe)) {
+    used.add(safe);
+    return safe;
+  }
+  const dot = safe.lastIndexOf('.');
+  const stem = dot > 0 ? safe.slice(0, dot) : safe;
+  const ext = dot > 0 ? safe.slice(dot) : '';
+  let i = 2;
+  while (used.has(`${stem}-${i}${ext}`)) i += 1;
+  const next = `${stem}-${i}${ext}`;
+  used.add(next);
+  return next;
+}
+
+async function safeRemove(
+  dir: FileSystemDirectoryHandle,
+  name: string,
+  recursive = false,
+): Promise<void> {
   try {
-    await dir.removeEntry(name);
+    await dir.removeEntry(name, { recursive });
   } catch {
     /* missing file is fine */
   }
@@ -282,10 +360,16 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
   const element = (j['element'] ?? null) as Record<string, unknown> | null;
   const region = (j['region'] ?? null) as Record<string, unknown> | null;
   const selector = element ? ((element['selector'] as string | undefined) ?? null) : null;
-  let regionInfo: { width: number; height: number } | null = null;
+  let regionInfo: { x: number; y: number; width: number; height: number } | null = null;
   if (region) {
     const rect = (region['rect'] ?? {}) as Record<string, unknown>;
+    // Region rects are stored in viewport coords at capture time. Convert to
+    // page/document space (add the scroll offset) so markers can re-anchor to
+    // the same content regardless of the current scroll position.
+    const scroll = (page['scroll'] ?? {}) as Record<string, unknown>;
     regionInfo = {
+      x: (Number(rect['x']) || 0) + (Number(scroll['x']) || 0),
+      y: (Number(rect['y']) || 0) + (Number(scroll['y']) || 0),
       width: Number(rect['width']) || 0,
       height: Number(rect['height']) || 0,
     };
@@ -323,6 +407,9 @@ function jsonToAnnotationPayload(json: Record<string, unknown>): AnnotationPaylo
       : [],
     network: Array.isArray(json['network'])
       ? (json['network'] as AnnotationPayload['network'])
+      : undefined,
+    attachments: Array.isArray(json['attachments'])
+      ? (json['attachments'] as AnnotationPayload['attachments'])
       : undefined,
   };
 }
@@ -382,11 +469,12 @@ function renderAnnotationMarkdown(
     lines.push(payload.voiceTranscript.trim());
     lines.push('');
   }
+  appendAttachmentsSection(lines, payload.attachments);
   appendScreenshotsSection(lines, viewportFile, elementFile);
   if (payload.element) {
     appendElementSection(lines, payload.element);
   } else if (payload.region) {
-    appendRegionSection(lines, payload.region.rect);
+    appendRegionSection(lines, payload.region.rect, payload.region.elements);
   }
   if (payload.element?.computedStyles) {
     appendComputedStyles(lines, payload.element.computedStyles);
@@ -432,12 +520,40 @@ function appendElementSection(
 function appendRegionSection(
   lines: string[],
   rect: NonNullable<AnnotationPayload['region']>['rect'],
+  elements?: NonNullable<AnnotationPayload['region']>['elements'],
 ): void {
   lines.push('## Region');
   lines.push('');
   lines.push(
     `- Bounding rect: x=${Math.round(rect.x)}, y=${Math.round(rect.y)}, w=${Math.round(rect.width)}, h=${Math.round(rect.height)}`,
   );
+  if (elements?.length) {
+    lines.push(`- Elements inside: ${elements.length}`);
+    lines.push('');
+    for (const el of elements) {
+      const r = el.boundingRect;
+      lines.push(
+        `  - \`${el.selector}\` (${Math.round(r.width)}×${Math.round(r.height)} at ${Math.round(r.x)},${Math.round(r.y)})`,
+      );
+    }
+  }
+  lines.push('');
+}
+
+function appendAttachmentsSection(
+  lines: string[],
+  attachments: AnnotationPayload['attachments'],
+): void {
+  if (!attachments?.length) return;
+  lines.push('## Attachments');
+  lines.push('');
+  for (const item of attachments) {
+    const path = item.path ?? '';
+    const size = item.bytes ?? item.size;
+    lines.push(
+      `- [${escapeMd(item.name)}](${path}) — ${item.mimeType || 'application/octet-stream'}, ${formatBytes(size)}`,
+    );
+  }
   lines.push('');
 }
 
@@ -568,4 +684,10 @@ function escapeTableCell(s: string): string {
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

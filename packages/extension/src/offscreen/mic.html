@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Enable microphone · DOMPin</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --ink: #101113;
+        --muted: #5b6068;
+        --accent: #0a84ff;
+        --accent-press: #006fdc;
+        --ok: #1c9c5b;
+        --err: #d8404a;
+        --border: #e3e5e9;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15171b;
+          --ink: #f5f6f8;
+          --muted: #a0a4ad;
+          --border: #2a2d33;
+          --ok: #46c98a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        padding: 22px;
+      }
+      main {
+        max-width: 360px;
+        text-align: center;
+      }
+      .mic {
+        width: 46px;
+        height: 46px;
+        margin: 0 auto 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0 0 8px;
+      }
+      p {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+        margin: 0 0 16px;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 10px 18px;
+        border-radius: 9px;
+        transition: background 120ms;
+      }
+      button:hover {
+        background: var(--accent-press);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      #status {
+        min-height: 18px;
+        margin: 14px 0 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+      #status[data-tone='ok'] {
+        color: var(--ok);
+      }
+      #status[data-tone='error'] {
+        color: var(--err);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mic" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 17 17" fill="none">
+          <rect
+            x="6.1"
+            y="2"
+            width="4.8"
+            height="7.4"
+            rx="2.4"
+            stroke="currentColor"
+            stroke-width="1.35"
+          />
+          <path
+            d="M3.7 7.5c0 2.65 2.15 4.8 4.8 4.8s4.8-2.15 4.8-4.8M8.5 12.3v2.2M6 14.5h5"
+            stroke="currentColor"
+            stroke-width="1.35"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <h1>Enable the microphone</h1>
+      <p>
+        DOMPin records your voice and sends it to your transcription provider. Allow microphone
+        access once and it works on every site.
+      </p>
+      <button id="enable" type="button">Enable microphone</button>
+      <p id="status" data-tone="idle"></p>
+    </main>
+    <script type="module" src="./mic.ts"></script>
+  </body>
+</html>

@@ -27,7 +27,7 @@ The build emits `packages/extension/dist`. That directory is the loadable extens
 4. Select `packages/extension/dist`.
 5. Pin the DOMPin icon to the toolbar so it is reachable on every page.
 
-The first time the extension loads, it opens the bundled demo page and the side panel walks you through picking a folder. If you've installed it before and just rebuilt, simply click the icon on any page to open the side panel.
+The first time you click the extension icon, the side panel walks you through picking a folder. If you've installed it before and just rebuilt, simply click the icon on any page to open the side panel.
 
 ## 3. Pick your vault folder
 
@@ -56,6 +56,17 @@ You have three ways to capture an element:
 - **Right-click**: choose **Annotate element with DOMPin** from the browser's native right-click menu on any element. The comment popup opens for that exact element without dismissing modals, popovers, or dropdowns.
 
 Hover over an element, click to anchor it, type a comment, press Enter. A new domain subfolder and a session subfolder will appear in your vault folder with `01.md`, `01.element.png`, `01.viewport.png`, and `01.json`.
+
+To capture a custom region, click and drag while the picker is active. DOMPin draws a dashed rectangle, captures that crop, and records the visible elements inside the region.
+
+The comment popup also includes:
+
+- **Record audio**: records through your browser microphone, sends the audio to the transcription provider configured in settings, and inserts the returned transcript into the visible comment box.
+- **Attach file**: adds one or more local files to the pin. Attached files are written into `NN.attachments/` next to the annotation files.
+
+## Optional: configure transcription
+
+Open the options page from the side panel menu. Under **Audio transcription**, choose **ElevenLabs** or **OpenAI**, enter the matching API key, and keep or change the default model. DOMPin currently defaults to `scribe_v2` for ElevenLabs and `gpt-4o-transcribe` for OpenAI.
 
 ## Optional: change the keyboard shortcut
 

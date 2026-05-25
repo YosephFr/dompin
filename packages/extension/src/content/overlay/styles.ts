@@ -156,6 +156,7 @@ export const OVERLAY_CSS = `
   border: 1px solid var(--dp-border);
   border-radius: 12px;
   width: 320px;
+  max-width: calc(100vw - 16px);
   box-shadow: var(--dp-shadow);
   font-family: ${FONT_UI};
   font-size: 13px;
@@ -242,6 +243,10 @@ export const OVERLAY_CSS = `
   background: color-mix(in srgb, var(--dp-paper) 96%, var(--dp-ink));
 }
 
+.dp-file-input {
+  display: none;
+}
+
 .dp-icon-btn {
   appearance: none;
   background: transparent;
@@ -265,6 +270,24 @@ export const OVERLAY_CSS = `
 .dp-icon-btn[data-active='true'] {
   color: var(--dp-accent);
   background: var(--dp-accent-soft);
+}
+
+.dp-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dp-rec-btn[data-active='true'] {
+  box-shadow: 0 0 0 3px var(--dp-accent-soft);
+}
+
+.dp-rec-btn[data-busy='true'] svg {
+  animation: dp-rec-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes dp-rec-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
 }
 
 .dp-spacer { flex: 1; }
@@ -311,6 +334,11 @@ export const OVERLAY_CSS = `
   font-size: 11px;
   color: var(--dp-accent);
   font-family: ${FONT_MONO};
+  min-width: 0;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dp-helper {
@@ -320,6 +348,53 @@ export const OVERLAY_CSS = `
   color: var(--dp-muted);
   font-family: ${FONT_MONO};
   letter-spacing: 0.02em;
+}
+
+.dp-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dp-attachment {
+  appearance: none;
+  border: 1px solid var(--dp-border);
+  background: color-mix(in srgb, var(--dp-paper) 94%, var(--dp-ink));
+  color: var(--dp-ink);
+  border-radius: 7px;
+  padding: 5px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  cursor: pointer;
+  font-family: ${FONT_UI};
+}
+
+.dp-attachment span {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.dp-attachment small {
+  color: var(--dp-muted);
+  font-size: 10px;
+  font-family: ${FONT_MONO};
+  white-space: nowrap;
+}
+
+.dp-attachment:hover {
+  border-color: var(--dp-accent);
+  background: var(--dp-accent-soft);
+}
+
+.dp-inline-error {
+  color: #d8404a;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .dp-pinned-region {

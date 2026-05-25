@@ -5,6 +5,7 @@ import { applyCrosshairCursor, removeCrosshairCursor } from './cursor-style.js';
 
 const HOVER_DEBOUNCE_MS = 50;
 const REGION_MIN_SIZE = 6;
+const REGION_DRAG_THRESHOLD = 5;
 
 export type PickerMode = 'sticky' | 'oneShot';
 
@@ -21,6 +22,8 @@ export class Picker {
   private mode: PickerMode = 'sticky';
   private hoverTimer: number | null = null;
   private regionStart: { x: number; y: number } | null = null;
+  private pointerDown: { x: number; y: number } | null = null;
+  private didRegionDrag = false;
 
   constructor(
     private highlight: Highlight,
@@ -59,6 +62,8 @@ export class Picker {
     removeEventListener('contextmenu', this.onContextMenu, true);
     this.clearHoverTimer();
     this.regionStart = null;
+    this.pointerDown = null;
+    this.didRegionDrag = false;
     this.regionRect.hide();
     this.highlight.hide();
   }
@@ -68,6 +73,8 @@ export class Picker {
     this.paused = true;
     this.clearHoverTimer();
     this.regionStart = null;
+    this.pointerDown = null;
+    this.didRegionDrag = false;
     this.regionRect.hide();
     this.highlight.hide();
     removeCrosshairCursor();
@@ -101,6 +108,19 @@ export class Picker {
       this.updateRegion(ev.clientX, ev.clientY);
       return;
     }
+    if (this.pointerDown) {
+      const dx = Math.abs(ev.clientX - this.pointerDown.x);
+      const dy = Math.abs(ev.clientY - this.pointerDown.y);
+      if (dx >= REGION_DRAG_THRESHOLD || dy >= REGION_DRAG_THRESHOLD) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.regionStart = this.pointerDown;
+        this.didRegionDrag = true;
+        this.highlight.hide();
+        this.updateRegion(ev.clientX, ev.clientY);
+        return;
+      }
+    }
     this.scheduleHover(ev.clientX, ev.clientY);
   };
 
@@ -109,22 +129,21 @@ export class Picker {
     if (ev.button !== 0) return;
     const target = this.targetElement(ev);
     if (!target) return;
-    if (ev.shiftKey) {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      this.regionStart = { x: ev.clientX, y: ev.clientY };
-      this.highlight.hide();
-      this.updateRegion(ev.clientX, ev.clientY);
-    }
+    this.pointerDown = { x: ev.clientX, y: ev.clientY };
+    this.didRegionDrag = false;
   };
 
   private onMouseUp = (ev: MouseEvent): void => {
     if (!this.isLive()) return;
-    if (!this.regionStart) return;
+    if (!this.regionStart) {
+      this.pointerDown = null;
+      return;
+    }
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const start = this.regionStart;
     this.regionStart = null;
+    this.pointerDown = null;
     const x = Math.min(start.x, ev.clientX);
     const y = Math.min(start.y, ev.clientY);
     const w = Math.abs(ev.clientX - start.x);
@@ -137,13 +156,14 @@ export class Picker {
   private onClickCapture = (ev: MouseEvent): void => {
     if (!this.isLive()) return;
     if (ev.button !== 0) return;
-    const target = this.targetElement(ev);
-    if (!target) {
+    if (this.didRegionDrag) {
       ev.preventDefault();
       ev.stopImmediatePropagation();
+      this.didRegionDrag = false;
       return;
     }
-    if (ev.shiftKey) {
+    const target = this.targetElement(ev);
+    if (!target) {
       ev.preventDefault();
       ev.stopImmediatePropagation();
       return;

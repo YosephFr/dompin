@@ -6,6 +6,7 @@ export interface AnnotationPayload {
   region: RegionContext | null;
   comment: string;
   voiceTranscript?: string;
+  attachments?: AnnotationAttachment[];
   screenshots: ScreenshotSet;
   console: ConsoleEntry[];
   network?: NetworkEntry[];
@@ -50,6 +51,17 @@ export interface ElementContext {
 
 export interface RegionContext {
   rect: RectInfo;
+  elements?: ElementContext[];
+}
+
+export interface AnnotationAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl?: string;
+  path?: string;
+  bytes?: number;
 }
 
 export interface RectInfo {
@@ -148,7 +160,10 @@ export interface WrittenFile {
 export interface PinForPage {
   id: string;
   ordinal: number;
+  /** URL of the view this pin was captured on, used to scope markers per view. */
+  url: string;
   selector: string | null;
+  /** Region rect in page/document coordinates (scroll-independent), or null. */
   region: RectInfo | null;
   commentPreview: string;
   createdAt: number;

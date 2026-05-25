@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { RectInfo } from '../../common/types.js';
+import type { AnnotationAttachment, RectInfo } from '../../common/types.js';
+import { sendRequest } from '../../common/messaging.js';
+import { newId } from '../../common/id.js';
 
 interface PopupOptions {
   anchorRect: RectInfo;
   selectorPreview: string;
   enableSpeech: boolean;
-  onConfirm: (input: { comment: string; voiceTranscript: string | null }) => void;
+  onConfirm: (input: {
+    comment: string;
+    voiceTranscript: string | null;
+    attachments: AnnotationAttachment[];
+  }) => void;
   onCancel: () => void;
 }
 
@@ -55,13 +61,19 @@ function PopupView(props: InternalProps): JSX.Element {
   const [comment, setComment] = useState('');
   const [transcript, setTranscript] = useState('');
   const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AnnotationAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const recognitionRef = useRef<unknown>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recordingRef = useRef(false);
 
-  const SpeechRecognition = useMemo(() => getSpeechRecognition(), []);
-  const speechAvailable = enableSpeech && SpeechRecognition != null;
+  // Recording runs in an extension-origin offscreen document, so the page's
+  // own microphone restrictions don't apply — only that the feature is enabled.
+  const speechAvailable = enableSpeech;
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -75,7 +87,10 @@ function PopupView(props: InternalProps): JSX.Element {
 
   useEffect(() => {
     return () => {
-      stopRecognition(recognitionRef.current);
+      if (recordingRef.current) {
+        recordingRef.current = false;
+        void sendRequest({ kind: 'audio:record-cancel' });
+      }
     };
   }, []);
 
@@ -84,13 +99,13 @@ function PopupView(props: InternalProps): JSX.Element {
   const handleConfirm = () => {
     const trimmed = comment.trim();
     if (!trimmed) return;
-    stopRecognition(recognitionRef.current);
-    onConfirm({ comment: trimmed, voiceTranscript: transcript.trim() || null });
+    discardRecording();
+    onConfirm({ comment: trimmed, voiceTranscript: transcript.trim() || null, attachments });
     onLifecycle('close');
   };
 
   const handleCancel = () => {
-    stopRecognition(recognitionRef.current);
+    discardRecording();
     onCancel();
     onLifecycle('close');
   };
@@ -108,60 +123,118 @@ function PopupView(props: InternalProps): JSX.Element {
   };
 
   const toggleRecording = () => {
-    if (!speechAvailable) return;
-    if (recording) {
-      stopRecognition(recognitionRef.current);
-      recognitionRef.current = null;
-      setRecording(false);
-      return;
-    }
-    const Ctor = SpeechRecognition as new () => SpeechRecognitionLike;
-    const r = new Ctor();
-    r.continuous = true;
-    r.interimResults = true;
-    r.lang = navigator.language || 'en-US';
-    let baselineComment = '';
-    let baselineTranscript = '';
-    let interim = '';
-    r.onstart = () => {
-      baselineComment = comment;
-      baselineTranscript = transcript;
-    };
-    r.onresult = (ev: SpeechRecognitionEventLike) => {
-      let finalText = '';
-      interim = '';
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        const result = ev.results[i];
-        if (!result) continue;
-        const alt = result[0];
-        if (!alt) continue;
-        if (result.isFinal) finalText += alt.transcript;
-        else interim += alt.transcript;
-      }
-      const sep = baselineComment && !baselineComment.endsWith(' ') ? ' ' : '';
-      setComment(baselineComment + sep + (finalText + interim).trim());
-      if (finalText) {
-        const tsep = baselineTranscript && !baselineTranscript.endsWith(' ') ? ' ' : '';
-        baselineTranscript = baselineTranscript + tsep + finalText.trim();
-        setTranscript(baselineTranscript);
-      }
-    };
-    r.onend = () => {
-      setRecording(false);
-      recognitionRef.current = null;
-    };
-    r.onerror = () => {
-      setRecording(false);
-      recognitionRef.current = null;
-    };
-    try {
-      r.start();
-      recognitionRef.current = r;
-      setRecording(true);
-    } catch {
-      setRecording(false);
-    }
+    if (!speechAvailable || transcribing) return;
+    if (recording) void finishRecording();
+    else void beginRecording();
   };
+
+  async function beginRecording(): Promise<void> {
+    setVoiceStatus('Requesting microphone…');
+    const resp = await sendRequest({ kind: 'audio:record-start' });
+    if (resp.ok) {
+      recordingRef.current = true;
+      setRecording(true);
+      setVoiceStatus('Recording…');
+    } else {
+      recordingRef.current = false;
+      setRecording(false);
+      setVoiceStatus(micErrorMessage(resp.error));
+    }
+  }
+
+  async function finishRecording(): Promise<void> {
+    recordingRef.current = false;
+    setRecording(false);
+    setTranscribing(true);
+    setVoiceStatus('Transcribing…');
+    try {
+      const resp = await sendRequest<{
+        text?: string;
+        provider?: string;
+        discarded?: boolean;
+      }>({ kind: 'audio:record-stop' });
+      if (!resp.ok) throw new Error(resp.error);
+      const text = resp.text?.trim();
+      if (resp.discarded || !text) {
+        setVoiceStatus(null);
+        return;
+      }
+      appendText(text);
+      setTranscript((prev) => joinText(prev, text));
+      setVoiceStatus(`${providerLabel(resp.provider ?? '')} transcript inserted.`);
+    } catch (e) {
+      setVoiceStatus(e instanceof Error ? e.message : 'Transcription failed.');
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  function discardRecording(): void {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    setRecording(false);
+    void sendRequest({ kind: 'audio:record-cancel' });
+  }
+
+  async function handleAttachmentFiles(files: FileList | null): Promise<void> {
+    if (!files?.length) return;
+    setAttachmentError(null);
+    try {
+      const next = await Promise.all(
+        Array.from(files).map(async (file) => ({
+          id: newId(),
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          dataUrl: await blobToDataUrl(file),
+        })),
+      );
+      setAttachments((prev) => [...prev, ...next]);
+    } catch (e) {
+      setAttachmentError(e instanceof Error ? e.message : 'Could not read attachment.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function removeAttachment(id: string): void {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function appendText(text: string): void {
+    setComment((prev) => joinText(prev, text));
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  function providerLabel(provider: string): string {
+    return provider === 'openai' ? 'OpenAI' : 'ElevenLabs';
+  }
+
+  function micErrorMessage(error: string): string {
+    if (error === 'MIC_PERMISSION_DENIED') return 'Microphone access is required to record.';
+    if (error === 'MIC_NOT_FOUND') return 'No microphone was found on this device.';
+    if (error === 'OFFSCREEN_UNAVAILABLE') return 'Update Chrome to use voice recording.';
+    return error || 'Microphone access failed.';
+  }
+
+  function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('Could not read file.'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function joinText(prev: string, next: string): string {
+    const clean = next.trim();
+    if (!clean) return prev;
+    const base = prev.trimEnd();
+    const sep = base ? (/[.!?:;]$/.test(base) ? ' ' : '\n') : '';
+    return `${base}${sep}${clean}`;
+  }
+
+  const voiceBusy = recording || transcribing;
 
   return (
     <div
@@ -187,6 +260,24 @@ function PopupView(props: InternalProps): JSX.Element {
           onChange={(e) => setComment(e.target.value)}
           onKeyDown={handleKey}
         />
+        {attachments.length ? (
+          <div className="dp-attachments" aria-label="Attachments">
+            {attachments.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="dp-attachment"
+                onClick={() => removeAttachment(item.id)}
+                title="Remove attachment"
+              >
+                <AttachIcon />
+                <span>{item.name}</span>
+                <small>{formatBytes(item.size)}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {attachmentError ? <div className="dp-inline-error">{attachmentError}</div> : null}
         <div className="dp-helper">
           <span>Pin · ⌘ Enter</span>
           <span>Cancel · Esc</span>
@@ -196,16 +287,34 @@ function PopupView(props: InternalProps): JSX.Element {
         {speechAvailable ? (
           <button
             type="button"
-            className="dp-icon-btn"
+            className="dp-icon-btn dp-rec-btn"
             onClick={toggleRecording}
             data-active={recording ? 'true' : 'false'}
+            data-busy={voiceBusy ? 'true' : 'false'}
             aria-label={recording ? 'Stop recording' : 'Start recording'}
-            title={recording ? 'Stop voice memo' : 'Voice memo'}
+            title={recording ? 'Stop recording' : 'Record audio'}
+            disabled={transcribing}
           >
-            <MicIcon />
+            <MicIcon active={recording} />
           </button>
         ) : null}
-        {recording ? <span className="dp-voice-status">Listening…</span> : null}
+        <input
+          ref={fileInputRef}
+          className="dp-file-input"
+          type="file"
+          multiple
+          onChange={(e) => void handleAttachmentFiles(e.target.files)}
+        />
+        <button
+          type="button"
+          className="dp-icon-btn"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Attach file"
+          title="Attach file"
+        >
+          <AttachIcon />
+        </button>
+        {voiceStatus ? <span className="dp-voice-status">{voiceStatus}</span> : null}
         <span className="dp-spacer" />
         <button type="button" className="dp-btn dp-btn-ghost" onClick={handleCancel}>
           Cancel
@@ -214,12 +323,64 @@ function PopupView(props: InternalProps): JSX.Element {
           type="button"
           className="dp-btn dp-btn-primary"
           onClick={handleConfirm}
-          disabled={comment.trim().length === 0}
+          disabled={comment.trim().length === 0 || voiceBusy}
         >
           Pin
         </button>
       </div>
     </div>
+  );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function CloseIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MicIcon({ active }: { active: boolean }): JSX.Element {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+      <rect
+        x="6.1"
+        y="2"
+        width="4.8"
+        height="7.4"
+        rx="2.4"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.35"
+      />
+      <path
+        d="M3.7 7.5c0 2.65 2.15 4.8 4.8 4.8s4.8-2.15 4.8-4.8M8.5 12.3v2.2M6 14.5h5"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+      {active ? <circle cx="8.5" cy="5.7" r="0.8" fill="var(--dp-paper)" /> : null}
+    </svg>
+  );
+}
+
+function AttachIcon(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M6 8.6l3.7-3.7a2.2 2.2 0 113.1 3.1l-5 5a3.7 3.7 0 01-5.2-5.2l5.4-5.4"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -238,78 +399,4 @@ function positionPopup(anchor: RectInfo, size: { w: number; h: number }): { x: n
   if (x + size.w > vw - 8) x = vw - size.w - 8;
   if (x < 8) x = 8;
   return { x, y };
-}
-
-interface SpeechAlternativeLike {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechResultLike {
-  readonly length: number;
-  readonly isFinal: boolean;
-  [index: number]: SpeechAlternativeLike;
-}
-
-interface SpeechResultsLike {
-  readonly length: number;
-  [index: number]: SpeechResultLike;
-}
-
-interface SpeechRecognitionEventLike {
-  readonly resultIndex: number;
-  readonly results: SpeechResultsLike;
-}
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onstart: (() => void) | null;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-}
-
-function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as Record<string, unknown>;
-  const ctor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
-    | (new () => SpeechRecognitionLike)
-    | undefined;
-  return ctor ?? null;
-}
-
-function stopRecognition(r: unknown): void {
-  if (!r) return;
-  const obj = r as SpeechRecognitionLike;
-  try {
-    obj.stop();
-  } catch {
-    /* noop */
-  }
-}
-
-function CloseIcon(): JSX.Element {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MicIcon(): JSX.Element {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="6" y="2" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.4" />
-      <path
-        d="M3.5 7.5C3.5 9.99 5.51 12 8 12s4.5-2.01 4.5-4.5M8 12v2M5.5 14h5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
