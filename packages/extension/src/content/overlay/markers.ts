@@ -7,7 +7,8 @@ export interface MarkerCallbacks {
 
 interface MarkerEntry {
   el: HTMLElement;
-  region: HTMLElement | null;
+  /** Region rectangle or element bounds; shown only while the dot is hovered. */
+  box: HTMLElement;
 }
 
 export class MarkerManager {
@@ -18,7 +19,6 @@ export class MarkerManager {
   private provisionalRect: { x: number; y: number; width: number; height: number } | null = null;
   private provisionalCorner: RegionCorner = 'tr';
   private currentView = location.href;
-  private pickerActive = false;
   private hoveredId: string | null = null;
 
   constructor(
@@ -41,17 +41,6 @@ export class MarkerManager {
   setView(url: string): void {
     if (url === this.currentView) return;
     this.currentView = url;
-    this.scheduleRender();
-  }
-
-  /**
-   * Region boxes are drawn only while the picker is on. With the picker off the
-   * page stays clean — just the numbered dots — and a pin's box appears only
-   * while the pointer hovers its dot.
-   */
-  setPickerActive(active: boolean): void {
-    if (this.pickerActive === active) return;
-    this.pickerActive = active;
     this.scheduleRender();
   }
 
@@ -101,7 +90,7 @@ export class MarkerManager {
     for (const [id, entry] of this.markers) {
       if (!incomingIds.has(id)) {
         entry.el.remove();
-        entry.region?.remove();
+        entry.box.remove();
         this.markers.delete(id);
       }
     }
@@ -117,13 +106,11 @@ export class MarkerManager {
         el.addEventListener('mouseenter', () => this.setHovered(p.id));
         el.addEventListener('mouseleave', () => this.setHovered(null));
         this.layer.appendChild(el);
-        let region: HTMLElement | null = null;
-        if (p.region) {
-          region = document.createElement('div');
-          region.className = 'dp-pinned-region';
-          this.layer.appendChild(region);
-        }
-        this.markers.set(p.id, { el, region });
+        const box = document.createElement('div');
+        box.className = 'dp-pinned-region';
+        box.style.display = 'none';
+        this.layer.appendChild(box);
+        this.markers.set(p.id, { el, box });
       } else {
         const entry = this.markers.get(p.id);
         if (entry) {
@@ -140,7 +127,7 @@ export class MarkerManager {
     removeEventListener('resize', this.onScrollResize);
     for (const entry of this.markers.values()) {
       entry.el.remove();
-      entry.region?.remove();
+      entry.box.remove();
     }
     this.markers.clear();
     if (this.rafId != null) cancelAnimationFrame(this.rafId);
@@ -165,7 +152,7 @@ export class MarkerManager {
       const rect = sameView(p.url, this.currentView) ? this.resolveRect(p) : null;
       if (!rect) {
         entry.el.style.display = 'none';
-        if (entry.region) entry.region.style.display = 'none';
+        entry.box.style.display = 'none';
         continue;
       }
       entry.el.style.display = 'flex';
@@ -173,14 +160,17 @@ export class MarkerManager {
       entry.el.style.top = '0';
       const m = markerPos(rect, p.markerCorner ?? 'tr');
       entry.el.style.transform = `translate(${m.x}px, ${m.y}px)`;
-      if (entry.region && p.region) {
-        const showBox = this.pickerActive || this.hoveredId === p.id;
-        entry.region.style.display = showBox ? 'block' : 'none';
-        entry.region.style.left = '0';
-        entry.region.style.top = '0';
-        entry.region.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
-        entry.region.style.width = `${rect.width}px`;
-        entry.region.style.height = `${rect.height}px`;
+      // A pin's box — the region rectangle or the element's bounds — shows only
+      // while its numbered dot is hovered; otherwise the page stays clean.
+      if (this.hoveredId === p.id) {
+        entry.box.style.display = 'block';
+        entry.box.style.left = '0';
+        entry.box.style.top = '0';
+        entry.box.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
+        entry.box.style.width = `${rect.width}px`;
+        entry.box.style.height = `${rect.height}px`;
+      } else {
+        entry.box.style.display = 'none';
       }
     }
   }

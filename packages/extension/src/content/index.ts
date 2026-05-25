@@ -88,8 +88,6 @@ class ContentApp {
   }
 
   private broadcastPickerState(active: boolean, mode?: 'sticky' | 'oneShot'): void {
-    // Region boxes follow the picker: shown while it's on, hidden (dots only) when off.
-    this.markers.setPickerActive(active);
     void sendRequest({
       kind: 'picker:state-broadcast',
       active,

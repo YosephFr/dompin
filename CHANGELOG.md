@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] — 2026-05-25
+
+### Changed
+
+- **A pin is just its number until you hover it.** Refines 0.4.4: a pin's box no longer stays on screen by itself — not even while the picker is on. Every pin shows only its numbered dot, and the box appears only while the pointer is over that dot. Hovering a **region** pin reveals the rectangle you drew; hovering an **element** pin now reveals the element's bounds (previously element dots showed nothing on hover). One consistent rule for both kinds, so a region pin no longer lingers with its box drawn while you keep picking.
+
 ## [0.4.4] — 2026-05-25
 
 ### Changed
@@ -188,6 +194,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.5]: https://github.com/YosephFr/dompin/releases/tag/v0.4.5
 [0.4.4]: https://github.com/YosephFr/dompin/releases/tag/v0.4.4
 [0.4.3]: https://github.com/YosephFr/dompin/releases/tag/v0.4.3
 [0.4.2]: https://github.com/YosephFr/dompin/releases/tag/v0.4.2
