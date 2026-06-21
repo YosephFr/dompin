@@ -11,6 +11,7 @@ import { applyTheme } from './theme.js';
 import {
   busyDeleteId,
   busyEditId,
+  busyResumeId,
   EMPTY_ORIGIN,
   readOriginTab,
   type Busy,
@@ -32,6 +33,37 @@ export function App(): JSX.Element {
   );
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function waitForTabView(tabId: number, url: string): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const onUpdated = (updatedTabId: number, info: chrome.tabs.TabChangeInfo) => {
+      if (updatedTabId !== tabId) return;
+      if (typeof info.url === 'string' && sameView(info.url, url)) finish();
+      if (info.status === 'complete') {
+        void chrome.tabs
+          .get(tabId)
+          .then((tab) => {
+            if (sameView(tab.url, url)) finish();
+          })
+          .catch(() => finish());
+      }
+    };
+    const timer = window.setTimeout(finish, 4000);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+  });
+}
+
 function Loading(): JSX.Element {
   const t = useT();
   return <div className="loading">{t.app.loading}</div>;
@@ -49,8 +81,6 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   const [error, setError] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [newDraft, setNewDraft] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<string>('');
   const [showOnboardingForced, setShowOnboardingForced] = useState(false);
   const [sessionFlash, setSessionFlash] = useState(false);
   const originRef = useRef<OriginTab>(EMPTY_ORIGIN);
@@ -333,6 +363,30 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     }
   }
 
+  async function resumeRecentSession(session: SessionListItem): Promise<void> {
+    const tab = originRef.current;
+    if (tab.tabId === null || tab.url === null) return;
+    setBusy({ kind: 'resume', id: session.id });
+    setError(null);
+    try {
+      const r = await sendRequest<{ session: Session }>({
+        kind: 'session:resume',
+        tabId: tab.tabId,
+        sessionId: session.id,
+        pageUrl: tab.url,
+      });
+      if (r.ok) {
+        setActiveSession(r.session);
+        await refreshState();
+        await startPickerForTab();
+      } else {
+        setError(r.error);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function startRename(): void {
     if (!activeSession) return;
     setRenameDraft(activeSession.name);
@@ -387,31 +441,31 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     }
   }
 
-  function startEditPin(pin: PinForPage): void {
-    setEditingId(pin.id);
-    setEditDraft(pin.commentPreview ?? '');
+  async function focusPin(pin: PinForPage): Promise<void> {
+    await sendPinCommand(pin, 'pin:focus');
   }
 
-  async function commitEditPin(): Promise<void> {
-    if (!editingId) return;
-    setBusy({ kind: 'edit', id: editingId });
+  async function startEditPin(pin: PinForPage): Promise<void> {
+    setBusy({ kind: 'edit', id: pin.id });
     setError(null);
     try {
-      const r = await sendRequest({
-        kind: 'annotation:edit-comment',
-        annotationId: editingId,
-        comment: editDraft,
-      });
-      if (r.ok) {
-        await refreshPins();
-        setEditingId(null);
-        setEditDraft('');
-      } else {
-        setError(r.error);
-      }
+      await sendPinCommand(pin, 'pin:edit');
     } finally {
       setBusy(null);
     }
+  }
+
+  async function sendPinCommand(pin: PinForPage, kind: 'pin:focus' | 'pin:edit'): Promise<void> {
+    const tabId = originRef.current.tabId;
+    if (tabId == null) return;
+    if (originRef.current.url && !sameView(originRef.current.url, pin.url)) {
+      await chrome.tabs.update(tabId, { url: pin.url });
+      await waitForTabView(tabId, pin.url);
+      await onTabChange();
+      await delay(250);
+    }
+    const r = await sendRequest({ kind, tabId, annotationId: pin.id });
+    if (!r.ok) setError(r.error);
   }
 
   async function deletePin(pin: PinForPage): Promise<void> {
@@ -481,9 +535,8 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   }
 
   const vault = state.vault;
-  // Markers and this list are scoped per view: only show pins captured on the
-  // URL currently in the tab. Falls back to all pins if the tab URL is unknown.
   const pagePins = origin.url ? pins.filter((p) => sameView(p.url, origin.url)) : pins;
+  const otherPins = origin.url ? pins.filter((p) => !sameView(p.url, origin.url)) : [];
   const showWizard = !vault.configured || showOnboardingForced;
   const pickerState: PickerState = pickerOn ? 'on' : 'off';
   const sessionDraftOpen = newDraft !== null || renameDraft !== null;
@@ -558,21 +611,21 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
               />
             ) : null}
             <PinListCard
-              pins={pagePins}
-              editingId={editingId}
-              editDraft={editDraft}
-              onEditDraftChange={setEditDraft}
-              onStartEdit={startEditPin}
-              onCommitEdit={() => void commitEditPin()}
-              onCancelEdit={() => {
-                setEditingId(null);
-                setEditDraft('');
-              }}
+              currentPins={pagePins}
+              otherPins={otherPins}
+              onFocus={(p) => void focusPin(p)}
+              onStartEdit={(p) => void startEditPin(p)}
               onDelete={(p) => void deletePin(p)}
               busyEditId={busyEditId(busy)}
               busyDeleteId={busyDeleteId(busy)}
             />
-            <RecentSessionsCard items={recent} activeId={activeSession?.id ?? null} />
+            <RecentSessionsCard
+              items={recent}
+              activeId={activeSession?.id ?? null}
+              currentUrl={origin.url}
+              busyResumeId={busyResumeId(busy)}
+              onResume={(s) => void resumeRecentSession(s)}
+            />
           </>
         )}
       </div>

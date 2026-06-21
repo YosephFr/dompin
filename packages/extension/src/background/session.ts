@@ -107,6 +107,33 @@ export async function newSession(
   return createSession(tabId, pageUrl, pageTitle, name);
 }
 
+export async function resumeSession(
+  tabId: number,
+  sessionId: string,
+  pageUrl: string,
+  pageTitle?: string | null,
+): Promise<Session> {
+  const store = await loadStore();
+  const rec = store.sessions[sessionId];
+  if (!rec) throw new Error(`Session ${sessionId} not found`);
+
+  const tabKey = String(tabId);
+  const prevId = store.active[tabKey];
+  if (prevId && prevId !== sessionId && store.sessions[prevId]) {
+    store.sessions[prevId].status = 'archived';
+  }
+  for (const [key, sid] of Object.entries(store.active)) {
+    if (sid === sessionId && key !== tabKey) delete store.active[key];
+  }
+  rec.status = 'active';
+  if (pageUrl) rec.pageUrl = pageUrl;
+  if (pageTitle) rec.pageTitle = pageTitle;
+  store.active[tabKey] = sessionId;
+  await persist();
+  notify(tabId);
+  return toSession(rec);
+}
+
 async function createSession(
   tabId: number,
   pageUrl: string,

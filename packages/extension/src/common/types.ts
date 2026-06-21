@@ -111,6 +111,7 @@ export interface NetworkEntry {
   status: number;
   durationMs: number;
   timestamp: number;
+  error?: string;
 }
 
 export type AnnotationId = string;
@@ -162,9 +163,13 @@ export interface PinForPage {
   ordinal: number;
   /** URL of the view this pin was captured on, used to scope markers per view. */
   url: string;
+  pageTitle: string;
   selector: string | null;
   /** Region rect in page/document coordinates (scroll-independent), or null. */
   region: RectInfo | null;
+  comment: string;
   commentPreview: string;
+  voiceTranscript?: string;
+  attachments?: AnnotationAttachment[];
   createdAt: number;
 }

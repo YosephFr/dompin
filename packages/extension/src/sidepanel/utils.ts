@@ -52,11 +52,17 @@ export type Busy =
   | 'new'
   | 'rename'
   | 'archive'
+  | { kind: 'resume'; id: string }
   | { kind: 'edit'; id: string }
   | { kind: 'delete'; id: string };
 
 export function busyEditId(busy: Busy): string | null {
   if (typeof busy === 'object' && busy !== null && busy.kind === 'edit') return busy.id;
+  return null;
+}
+
+export function busyResumeId(busy: Busy): string | null {
+  if (typeof busy === 'object' && busy !== null && busy.kind === 'resume') return busy.id;
   return null;
 }
 

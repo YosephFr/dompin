@@ -60,7 +60,7 @@ The repository ships with a strict `tsconfig.base.json`: `strict`, `noUncheckedI
 3. Click the DOMPin icon to open the side panel. The first time, the wizard walks you through picking a vault folder. A scratch folder under `/tmp` is fine for experiments.
 4. Open `examples/demo-app/index.html` (served from the extension) or any real site you have permission to annotate.
 5. In the side panel, click **Start new session** in the Session card. Name it and press Enter — the picker arms automatically.
-6. Hover over a card or button, click to anchor, type a comment, press `Cmd+Enter`. The picker stays on for the next pin.
+6. Hover over a card or button, click to anchor, type a comment, press Enter. The picker stays on for the next pin.
 7. Try the one-shot shortcut: press `Cmd+Shift+.` (or `Ctrl+Shift+.`) on a fresh element. The picker captures one element and auto-stops.
 8. Try the right-click flow on a hover-only element: right-click → **Annotate element with DOMPin** → confirm the popup captures that element without dismissing it.
 9. Try region capture: with the picker active, click and drag a rectangle over part of the page. The dashed region should stay visible until the popup opens, and `NN.json` should include `region.elements`.
@@ -85,7 +85,7 @@ The session card also lets you rename the active session, start a new one, or en
 
 `v0.x` until the file schema stabilizes. Each release:
 
-1. Bump the version in `package.json` and `packages/extension/package.json`.
+1. Bump the version in `package.json`, `packages/extension/package.json`, and `packages/extension/manifest.json`.
 2. Update `CHANGELOG.md`.
 3. `git tag vX.Y.Z && git push --tags`.
 4. `gh release create vX.Y.Z` with notes drawn from the changelog.

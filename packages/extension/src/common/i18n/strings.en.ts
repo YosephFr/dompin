@@ -61,14 +61,21 @@ export const en = {
   pins: {
     eyebrow: 'Annotations',
     onThisPage: (n: number) => `${n} on this page`,
+    inSession: (n: number) => `${n} in this session`,
+    currentView: 'This view',
+    otherViews: 'Elsewhere in this session',
     empty: 'None yet — start the picker and click an element on the page.',
+    emptySession: 'No annotations in this session yet.',
     noComment: '(no comment)',
+    viewLabel: (title: string) => `View: ${title}`,
     edit: 'Edit',
     delete: 'Delete',
     deleteConfirm: (ord: string) => `Delete annotation #${ord}?`,
   },
   recent: {
     eyebrow: 'Recent sessions',
+    resume: 'Resume',
+    resuming: 'Resuming…',
     relative: {
       now: 'just now',
       mAgo: (m: number) => `${m}m ago`,

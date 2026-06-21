@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { AnnotationAttachment, RectInfo } from '../../common/types.js';
 import { sendRequest } from '../../common/messaging.js';
@@ -8,6 +8,10 @@ interface PopupOptions {
   anchorRect: RectInfo;
   selectorPreview: string;
   enableSpeech: boolean;
+  initialComment?: string;
+  initialVoiceTranscript?: string;
+  initialAttachments?: AnnotationAttachment[];
+  submitLabel?: string;
   onConfirm: (input: {
     comment: string;
     voiceTranscript: string | null;
@@ -20,6 +24,7 @@ export class CommentPopup {
   private mount: HTMLElement;
   private root: Root | null = null;
   private flushFn: (() => void) | null = null;
+  private seq = 0;
 
   constructor(private layer: HTMLElement) {
     this.mount = document.createElement('div');
@@ -31,8 +36,10 @@ export class CommentPopup {
 
   open(opts: PopupOptions): void {
     if (!this.root) this.root = createRoot(this.mount);
+    this.seq += 1;
     this.root.render(
       <PopupView
+        key={this.seq}
         {...opts}
         registerFlush={(fn) => {
           this.flushFn = fn;
@@ -76,23 +83,38 @@ function PopupView(props: InternalProps): JSX.Element {
     anchorRect,
     selectorPreview,
     enableSpeech,
+    initialComment,
+    initialVoiceTranscript,
+    initialAttachments,
+    submitLabel,
     onConfirm,
     onCancel,
     onLifecycle,
     registerFlush,
   } = props;
-  const [comment, setComment] = useState('');
-  const [transcript, setTranscript] = useState('');
+  const [comment, setComment] = useState(() => initialComment ?? '');
+  const [transcript, setTranscript] = useState(() => initialVoiceTranscript ?? '');
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<AnnotationAttachment[]>([]);
+  const [attachments, setAttachments] = useState<AnnotationAttachment[]>(
+    () => initialAttachments ?? [],
+  );
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [manualPosition, setManualPosition] = useState<{ x: number; y: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recordingRef = useRef(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    current: { x: number; y: number };
+  } | null>(null);
 
   // Recording runs in an extension-origin offscreen document, so the page's
   // own microphone restrictions don't apply — only that the feature is enabled.
@@ -123,7 +145,9 @@ function PopupView(props: InternalProps): JSX.Element {
     };
   }, []);
 
-  const position = positionPopup(anchorRect, size ?? { w: 320, h: 200 });
+  const naturalPosition = positionPopup(anchorRect, size ?? { w: 320, h: 200 });
+  const position = manualPosition ?? naturalPosition;
+  const actionLabel = submitLabel ?? 'Pin';
 
   const handleConfirm = () => {
     const trimmed = comment.trim();
@@ -276,6 +300,48 @@ function PopupView(props: InternalProps): JSX.Element {
 
   const voiceBusy = recording || transcribing;
 
+  function handleDragStart(ev: PointerEvent<HTMLDivElement>): void {
+    const target = ev.target;
+    if (target instanceof HTMLElement && target.closest('button')) return;
+    const origin = manualPosition ?? naturalPosition;
+    dragRef.current = {
+      pointerId: ev.pointerId,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      originX: origin.x,
+      originY: origin.y,
+      current: origin,
+    };
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  }
+
+  function handleDragMove(ev: PointerEvent<HTMLDivElement>): void {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== ev.pointerId) return;
+    const next = clampPosition(
+      {
+        x: drag.originX + ev.clientX - drag.startX,
+        y: drag.originY + ev.clientY - drag.startY,
+      },
+      size ?? { w: 320, h: 200 },
+    );
+    drag.current = next;
+    if (cardRef.current) {
+      cardRef.current.style.transform = `translate(${next.x}px, ${next.y}px)`;
+    }
+  }
+
+  function handleDragEnd(ev: PointerEvent<HTMLDivElement>): void {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== ev.pointerId) return;
+    dragRef.current = null;
+    setManualPosition(drag.current);
+    if (ev.currentTarget.hasPointerCapture(ev.pointerId)) {
+      ev.currentTarget.releasePointerCapture(ev.pointerId);
+    }
+  }
+
   return (
     <div
       ref={cardRef}
@@ -283,7 +349,13 @@ function PopupView(props: InternalProps): JSX.Element {
       style={{ left: 0, top: 0, transform: `translate(${position.x}px, ${position.y}px)` }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="dp-popup-header">
+      <div
+        className="dp-popup-header"
+        onPointerDown={handleDragStart}
+        onPointerMove={handleDragMove}
+        onPointerUp={handleDragEnd}
+        onPointerCancel={handleDragEnd}
+      >
         <div className="dp-popup-meta" title={selectorPreview}>
           {selectorPreview}
         </div>
@@ -320,7 +392,7 @@ function PopupView(props: InternalProps): JSX.Element {
         ) : null}
         {attachmentError ? <div className="dp-inline-error">{attachmentError}</div> : null}
         <div className="dp-helper">
-          <span>Pin · Enter</span>
+          <span>{actionLabel} · Enter</span>
           <span>Cancel · Esc · ⇧↵ newline</span>
         </div>
       </div>
@@ -366,7 +438,7 @@ function PopupView(props: InternalProps): JSX.Element {
           onClick={handleConfirm}
           disabled={comment.trim().length === 0 || voiceBusy}
         >
-          Pin
+          {actionLabel}
         </button>
       </div>
     </div>
@@ -440,4 +512,17 @@ function positionPopup(anchor: RectInfo, size: { w: number; h: number }): { x: n
   if (x + size.w > vw - 8) x = vw - size.w - 8;
   if (x < 8) x = 8;
   return { x, y };
+}
+
+function clampPosition(
+  pos: { x: number; y: number },
+  size: { w: number; h: number },
+): {
+  x: number;
+  y: number;
+} {
+  return {
+    x: Math.min(Math.max(pos.x, 8), Math.max(8, window.innerWidth - size.w - 8)),
+    y: Math.min(Math.max(pos.y, 8), Math.max(8, window.innerHeight - size.h - 8)),
+  };
 }

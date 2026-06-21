@@ -4,6 +4,7 @@ import { sendRequest } from '../common/messaging.js';
 import { isOriginAllowed, type Settings } from '../common/settings.js';
 import { loadSettings, onSettingsChange } from '../common/storage.js';
 import { createLogger } from '../common/logger.js';
+import { sameView } from '../common/view-url.js';
 import { installConsoleBuffer } from './console-buffer.js';
 import {
   ensureOverlay,
@@ -15,6 +16,7 @@ import { Highlight } from './overlay/highlight.js';
 import { RegionRect } from './overlay/region-rect.js';
 import { MarkerManager } from './overlay/markers.js';
 import { CommentPopup } from './overlay/comment-popup.js';
+import { showPulse } from './overlay/pulse.js';
 import { Picker } from './picker/element-picker.js';
 import {
   capturePin,
@@ -36,6 +38,7 @@ class ContentApp {
   private popup: CommentPopup;
   private picker: Picker;
   private currentUrl: string;
+  private pins: PinForPage[] = [];
   private active = true;
   private lastRightClickedEl: Element | null = null;
   private urlPollId: number | null = null;
@@ -113,7 +116,10 @@ class ContentApp {
   private async refreshMarkers(): Promise<void> {
     this.markers.setView(location.href);
     const r = await sendRequest<{ pins: PinForPage[] }>({ kind: 'pins:for-tab' });
-    if (r.ok) this.markers.update(r.pins);
+    if (r.ok) {
+      this.pins = r.pins;
+      this.markers.update(r.pins);
+    }
   }
 
   private captureOverlay(): CaptureOverlay {
@@ -224,6 +230,110 @@ class ContentApp {
     });
   }
 
+  private async handlePinFocus(annotationId: string, edit: boolean): Promise<void> {
+    let pin = this.pins.find((p) => p.id === annotationId);
+    if (!pin) {
+      await this.refreshMarkers();
+      pin = this.pins.find((p) => p.id === annotationId);
+    }
+    if (!pin || !sameView(pin.url, location.href)) return;
+    this.scrollPinIntoView(pin);
+    window.setTimeout(() => {
+      const target = this.resolvePinTarget(pin);
+      if (!target) return;
+      if (target.element) {
+        this.highlight.show(target.element);
+        if (!edit) window.setTimeout(() => this.highlight.hide(), 1800);
+      } else {
+        this.regionRect.show(target.rect);
+        if (!edit) window.setTimeout(() => this.regionRect.hide(), 1800);
+      }
+      showPulse(this.overlay.layer, target.rect, 1500);
+      if (edit) this.openEditPopup(pin, target);
+    }, 240);
+  }
+
+  private openEditPopup(
+    pin: PinForPage,
+    target: { rect: RectInfo; selectorPreview: string; element: Element | null },
+  ): void {
+    this.popup.close();
+    const finish = () => {
+      this.highlight.hide();
+      this.regionRect.hide();
+    };
+    this.popup.open({
+      anchorRect: target.rect,
+      selectorPreview: target.selectorPreview,
+      enableSpeech: this.settings.flags.enableWebSpeech,
+      initialComment: pin.comment,
+      initialVoiceTranscript: pin.voiceTranscript ?? '',
+      initialAttachments: pin.attachments ?? [],
+      submitLabel: 'Save',
+      onConfirm: async (note) => {
+        const resp = await sendRequest({
+          kind: 'annotation:update',
+          annotationId: pin.id,
+          comment: note.comment,
+          voiceTranscript: note.voiceTranscript,
+          attachments: note.attachments,
+        });
+        if (!resp.ok) log.warn('annotation update failed', resp.error);
+        await this.refreshMarkers();
+        finish();
+      },
+      onCancel: () => finish(),
+    });
+  }
+
+  private scrollPinIntoView(pin: PinForPage): void {
+    if (pin.region) {
+      window.scrollTo({
+        left: Math.max(0, pin.region.x + pin.region.width / 2 - window.innerWidth / 2),
+        top: Math.max(0, pin.region.y + pin.region.height / 2 - window.innerHeight / 2),
+        behavior: 'smooth',
+      });
+      return;
+    }
+    const el = this.resolvePinElement(pin);
+    el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+
+  private resolvePinTarget(
+    pin: PinForPage,
+  ): { rect: RectInfo; selectorPreview: string; element: Element | null } | null {
+    if (pin.region) {
+      return {
+        rect: {
+          x: pin.region.x - window.scrollX,
+          y: pin.region.y - window.scrollY,
+          width: pin.region.width,
+          height: pin.region.height,
+        },
+        selectorPreview: `region · ${Math.round(pin.region.width)} × ${Math.round(pin.region.height)}`,
+        element: null,
+      };
+    }
+    const el = this.resolvePinElement(pin);
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return null;
+    return {
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      selectorPreview: pin.selector ?? previewSelector(el),
+      element: el,
+    };
+  }
+
+  private resolvePinElement(pin: PinForPage): Element | null {
+    if (!pin.selector) return null;
+    try {
+      return document.querySelector(pin.selector);
+    } catch {
+      return null;
+    }
+  }
+
   private setupTabMessageListener(): void {
     chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
       if (!message || typeof message !== 'object' || !('kind' in message)) return false;
@@ -245,6 +355,12 @@ class ContentApp {
           this.handleAnnotateContext();
           sendResponse({ ok: true });
           return false;
+        case 'pin:focus':
+          void this.handlePinFocus(cmd.annotationId, false).then(() => sendResponse({ ok: true }));
+          return true;
+        case 'pin:edit':
+          void this.handlePinFocus(cmd.annotationId, true).then(() => sendResponse({ ok: true }));
+          return true;
         case 'picker:query-state':
           sendResponse({
             ok: true,

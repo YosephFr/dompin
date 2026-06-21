@@ -40,9 +40,11 @@ Each `NN.md` contains your comment, optional voice transcript, attachment links,
 
 ## Sessions
 
-Sessions are explicit and named. The side panel shows the current session for the active tab; **New session** opens an inline name field so you can split work into focused folders. Press Enter without typing anything and DOMPin falls back to a default name like `host_HHMM`. The card lists pin count and last-write time at a glance; **Rename** and **End session** live in the kebab menu on the right of the card header. End session stops the picker and frees the tab — your files stay where they are.
+Sessions are explicit and named. The side panel shows the current session for the active tab; **New session** opens an inline name field so you can split work into focused folders. Press Enter without typing anything and DOMPin falls back to a default name like `host_HHMM`. The card lists pin count and last-write time at a glance; **Rename** and **End session** are visible on the session card. End session stops the picker and frees the tab — your files stay where they are.
 
-Recent sessions for the same domain are listed below for quick context, and pins on the current page can be edited or deleted right from the side panel.
+Recent sessions for the same domain are listed below for quick context. When the current tab is on the same view as a recent session, **Resume** reactivates that session so new annotations continue in the existing folder.
+
+The annotation list shows the full active session, grouped into pins from the current view and pins from other views. Click a row to jump to that annotation on the page; **Edit** reopens the in-page DOMPin popup with the original comment, voice tools, and attachments.
 
 Markers are scoped to the view you captured them on. A session can span several pages or SPA routes; when you move to a different view its pins step aside — both the on-page markers and the side-panel list — and they reappear the moment you return. So pinning the home page and then walking through a menu or sub-section keeps each view's annotations to itself.
 

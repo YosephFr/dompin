@@ -13,6 +13,8 @@ interface IndexEntry {
   /** Region rect in page/document coordinates (rect at capture + scroll). */
   region: { x: number; y: number; width: number; height: number } | null;
   comment: string;
+  voiceTranscript?: string;
+  attachments?: AnnotationPayload['attachments'];
   pageUrl: string;
   pageTitle: string;
 }
@@ -114,6 +116,22 @@ export async function editAnnotationComment(
   annotationId: string,
   newComment: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  return updateAnnotation(session, annotationId, {
+    comment: newComment,
+    voiceTranscript: undefined,
+    attachments: undefined,
+  });
+}
+
+export async function updateAnnotation(
+  session: Session,
+  annotationId: string,
+  input: {
+    comment: string;
+    voiceTranscript?: string | null;
+    attachments?: AnnotationPayload['attachments'];
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
   return serialize(async () => {
     try {
       const dir = await getSessionDir(session, false);
@@ -126,12 +144,22 @@ export async function editAnnotationComment(
       const file = await jsonHandle.getFile();
       const text = await file.text();
       const json = JSON.parse(text) as Record<string, unknown>;
-      const trimmed = newComment.trim();
+      const trimmed = input.comment.trim();
+      const previousAttachments = Array.isArray(json['attachments'])
+        ? (json['attachments'] as NonNullable<AnnotationPayload['attachments']>)
+        : [];
       json['comment'] = trimmed;
+      if (input.voiceTranscript !== undefined) {
+        if (input.voiceTranscript?.trim()) {
+          json['voiceTranscript'] = input.voiceTranscript.trim();
+        } else {
+          delete json['voiceTranscript'];
+        }
+      }
       const meta = (json['meta'] ?? {}) as Record<string, unknown>;
+      meta['schemaVersion'] = 2;
       meta['editedAt'] = Date.now();
       json['meta'] = meta;
-      await writeText(dir, `${base}.json`, JSON.stringify(json, null, 2));
 
       const screenshots = (json['screenshots'] ?? {}) as Record<string, unknown>;
       const viewportRel = String(screenshots['viewport'] ?? '');
@@ -139,7 +167,17 @@ export async function editAnnotationComment(
       const viewportFile = viewportRel ? viewportRel.replace(/^\.\//, '') : null;
       const elementFile = elementRel ? String(elementRel).replace(/^\.\//, '') : null;
 
-      const payload = jsonToAnnotationPayload(json);
+      let payload = jsonToAnnotationPayload(json);
+      if (input.attachments !== undefined) {
+        await removeDroppedAttachments(dir, previousAttachments, input.attachments);
+        const result = await writeAttachments(dir, session, base, {
+          ...payload,
+          attachments: input.attachments,
+        });
+        payload = result.payload;
+        json['attachments'] = payload.attachments ?? [];
+      }
+      await writeText(dir, `${base}.json`, JSON.stringify({ ...json, ...payload }, null, 2));
       const md = renderAnnotationMarkdown(
         session,
         payload,
@@ -176,7 +214,11 @@ export async function readSessionPins(session: Session): Promise<PinForPage[]> {
         url: e.pageUrl,
         selector: e.selector,
         region: e.region != null ? { ...e.region } : null,
+        pageTitle: e.pageTitle,
+        comment: e.comment,
         commentPreview: previewComment(e.comment),
+        ...(e.voiceTranscript ? { voiceTranscript: e.voiceTranscript } : {}),
+        ...(e.attachments?.length ? { attachments: e.attachments } : {}),
         createdAt: e.createdAt,
       }))
       .sort((a, b) => a.ordinal - b.ordinal);
@@ -279,6 +321,8 @@ async function writeAttachments(
 
   for (const attachment of attachments) {
     if (!attachment.dataUrl) {
+      const existingName = fileNameFromAttachmentPath(attachment.path);
+      if (existingName) used.add(existingName);
       written.push(attachment);
       continue;
     }
@@ -299,6 +343,32 @@ async function writeAttachments(
   }
 
   return { payload: { ...payload, attachments: written }, files };
+}
+
+async function removeDroppedAttachments(
+  dir: FileSystemDirectoryHandle,
+  previous: NonNullable<AnnotationPayload['attachments']>,
+  next: AnnotationPayload['attachments'],
+): Promise<void> {
+  const keptIds = new Set((next ?? []).map((a) => a.id));
+  for (const item of previous) {
+    if (keptIds.has(item.id)) continue;
+    const path = item.path?.replace(/^\.\//, '');
+    if (!path) continue;
+    const [folder, file] = path.split('/');
+    if (!folder || !file) continue;
+    try {
+      const attachmentDir = await dir.getDirectoryHandle(folder);
+      await safeRemove(attachmentDir, file);
+    } catch {}
+  }
+}
+
+function fileNameFromAttachmentPath(path: string | undefined): string | null {
+  if (!path) return null;
+  const clean = path.replace(/^\.\//, '');
+  const parts = clean.split('/');
+  return parts[parts.length - 1] || null;
 }
 
 function uniqueAttachmentName(name: string, used: Set<string>): string {
@@ -360,6 +430,9 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
   const element = (j['element'] ?? null) as Record<string, unknown> | null;
   const region = (j['region'] ?? null) as Record<string, unknown> | null;
   const selector = element ? ((element['selector'] as string | undefined) ?? null) : null;
+  const attachments = Array.isArray(j['attachments'])
+    ? (j['attachments'] as AnnotationPayload['attachments'])
+    : undefined;
   let regionInfo: { x: number; y: number; width: number; height: number } | null = null;
   if (region) {
     const rect = (region['rect'] ?? {}) as Record<string, unknown>;
@@ -381,6 +454,9 @@ function parseIndexEntry(ordinal: number, json: unknown): IndexEntry {
     selector,
     region: regionInfo,
     comment: String(j['comment'] ?? ''),
+    voiceTranscript:
+      typeof j['voiceTranscript'] === 'string' ? (j['voiceTranscript'] as string) : undefined,
+    attachments,
     pageUrl: String(page['url'] ?? ''),
     pageTitle: String(page['title'] ?? ''),
   };
@@ -429,6 +505,7 @@ function serializePayloadJson(
   const meta = {
     sessionId: session.id,
     sessionName: session.name,
+    schemaVersion: 2,
     ordinal,
     domain: session.domain,
     writtenAt: Date.now(),
@@ -609,7 +686,8 @@ function appendNetworkSection(lines: string[], entries: AnnotationPayload['netwo
   lines.push('## Network failures');
   lines.push('');
   for (const n of entries) {
-    lines.push(`- \`[${n.method} ${n.status}] ${n.url} (${n.durationMs}ms)\``);
+    const error = n.error ? ` — ${truncate(n.error, 120)}` : '';
+    lines.push(`- \`[${n.method} ${n.status}] ${n.url} (${n.durationMs}ms)${error}\``);
   }
   lines.push('');
 }

@@ -64,14 +64,21 @@ export const es: Strings = {
   pins: {
     eyebrow: 'Anotaciones',
     onThisPage: (n: number) => `${n} en esta página`,
+    inSession: (n: number) => `${n} en esta sesión`,
+    currentView: 'Esta vista',
+    otherViews: 'Otras vistas de esta sesión',
     empty: 'Ninguna aún — iniciá el picker y hacé clic en un elemento.',
+    emptySession: 'Todavía no hay anotaciones en esta sesión.',
     noComment: '(sin comentario)',
+    viewLabel: (title: string) => `Vista: ${title}`,
     edit: 'Editar',
     delete: 'Eliminar',
     deleteConfirm: (ord: string) => `¿Eliminar la anotación #${ord}?`,
   },
   recent: {
     eyebrow: 'Sesiones recientes',
+    resume: 'Retomar',
+    resuming: 'Retomando…',
     relative: {
       now: 'ahora',
       mAgo: (m: number) => `hace ${m}m`,

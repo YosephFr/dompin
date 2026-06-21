@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] — 2026-06-21
+
+### Added
+
+- **Recent sessions can be resumed from the same view.** When the current tab matches a recent session's latest view, the side panel shows **Resume** / **Retomar** so you can reactivate that session and keep adding annotations instead of creating a new folder.
+- **The annotation list now covers the full active session.** Pins from the current view stay grouped first, and pins from other views in the same session remain visible below so you can jump back to them.
+- **Clicking an annotation focuses it on the page.** DOMPin scrolls to the saved element or region and pulses the target; clicking a pin from another view navigates to that view first.
+- **Editing uses the original in-page popup.** The side panel's Edit action reopens the DOMPin popup over the saved element or region with the existing comment, voice transcript, and attachments, so new audio or files can be added in context.
+- **The annotation popup can be dragged while writing.** Move it from the header when it covers the target content; the selected element or region stays highlighted in the background.
+- **Optional network-failure capture now records real failed requests.** When enabled, the background worker keeps a recent per-tab buffer from `webRequest` and includes those failures in new annotations.
+
+### Fixed
+
+- Annotation edits now preserve full comments instead of starting from the shortened side-panel preview.
+- Saved annotation JSON now records `meta.schemaVersion`.
+- Security and development docs now match the optional transcription/network surfaces and the current Enter-to-submit behavior.
+
 ## [0.4.7] — 2026-05-25
 
 ### Changed
@@ -221,6 +238,7 @@ Initial public release.
 - GitHub Actions CI: format check, typecheck, build.
 - MIT license, public-friendly README, contribution guide, security policy, issue and PR templates.
 
+[0.4.8]: https://github.com/YosephFr/dompin/releases/tag/v0.4.8
 [0.4.7]: https://github.com/YosephFr/dompin/releases/tag/v0.4.7
 [0.4.6]: https://github.com/YosephFr/dompin/releases/tag/v0.4.6
 [0.4.5]: https://github.com/YosephFr/dompin/releases/tag/v0.4.5

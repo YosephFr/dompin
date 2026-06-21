@@ -2,49 +2,100 @@ import type { PinForPage } from '../../common/types.js';
 import { useT } from '../../common/i18n/index.js';
 
 export function PinListCard({
-  pins,
-  editingId,
-  editDraft,
-  onEditDraftChange,
+  currentPins,
+  otherPins,
+  onFocus,
   onStartEdit,
-  onCommitEdit,
-  onCancelEdit,
   onDelete,
   busyEditId,
   busyDeleteId,
 }: {
-  pins: PinForPage[];
-  editingId: string | null;
-  editDraft: string;
-  onEditDraftChange: (v: string) => void;
+  currentPins: PinForPage[];
+  otherPins: PinForPage[];
+  onFocus: (p: PinForPage) => void;
   onStartEdit: (p: PinForPage) => void;
-  onCommitEdit: () => void;
-  onCancelEdit: () => void;
   onDelete: (p: PinForPage) => void;
   busyEditId: string | null;
   busyDeleteId: string | null;
 }): JSX.Element {
   const t = useT();
+  const total = currentPins.length + otherPins.length;
   return (
     <section className="card">
       <div className="card-header">
         <span className="card-eyebrow">{t.pins.eyebrow}</span>
-        <span className="session-meta">{t.pins.onThisPage(pins.length)}</span>
+        <span className="session-meta">{t.pins.inSession(total)}</span>
+      </div>
+      {total === 0 ? (
+        <p className="card-text muted">{t.pins.emptySession}</p>
+      ) : (
+        <div className="pin-groups">
+          <PinGroup
+            title={t.pins.currentView}
+            countLabel={t.pins.onThisPage(currentPins.length)}
+            pins={currentPins}
+            onFocus={onFocus}
+            onStartEdit={onStartEdit}
+            onDelete={onDelete}
+            busyEditId={busyEditId}
+            busyDeleteId={busyDeleteId}
+            emptyText={t.pins.empty}
+          />
+          {otherPins.length ? (
+            <PinGroup
+              title={t.pins.otherViews}
+              countLabel={String(otherPins.length)}
+              pins={otherPins}
+              onFocus={onFocus}
+              onStartEdit={onStartEdit}
+              onDelete={onDelete}
+              busyEditId={busyEditId}
+              busyDeleteId={busyDeleteId}
+            />
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PinGroup({
+  title,
+  countLabel,
+  pins,
+  onFocus,
+  onStartEdit,
+  onDelete,
+  busyEditId,
+  busyDeleteId,
+  emptyText,
+}: {
+  title: string;
+  countLabel: string;
+  pins: PinForPage[];
+  onFocus: (p: PinForPage) => void;
+  onStartEdit: (p: PinForPage) => void;
+  onDelete: (p: PinForPage) => void;
+  busyEditId: string | null;
+  busyDeleteId: string | null;
+  emptyText?: string;
+}): JSX.Element {
+  return (
+    <div className="pin-group">
+      <div className="pin-group-head">
+        <span>{title}</span>
+        <span>{countLabel}</span>
       </div>
       {pins.length === 0 ? (
-        <p className="card-text muted">{t.pins.empty}</p>
+        <p className="card-text muted">{emptyText}</p>
       ) : (
         <ul className="pin-list">
           {pins.map((p) => (
             <PinItem
               key={p.id}
               pin={p}
-              isEditing={editingId === p.id}
-              editDraft={editDraft}
-              onEditDraftChange={onEditDraftChange}
+              onFocus={onFocus}
               onStartEdit={onStartEdit}
-              onCommitEdit={onCommitEdit}
-              onCancelEdit={onCancelEdit}
               onDelete={onDelete}
               busyEdit={busyEditId === p.id}
               busyDelete={busyDeleteId === p.id}
@@ -52,91 +103,57 @@ export function PinListCard({
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
 
 function PinItem({
   pin,
-  isEditing,
-  editDraft,
-  onEditDraftChange,
+  onFocus,
   onStartEdit,
-  onCommitEdit,
-  onCancelEdit,
   onDelete,
   busyEdit,
   busyDelete,
 }: {
   pin: PinForPage;
-  isEditing: boolean;
-  editDraft: string;
-  onEditDraftChange: (v: string) => void;
+  onFocus: (p: PinForPage) => void;
   onStartEdit: (p: PinForPage) => void;
-  onCommitEdit: () => void;
-  onCancelEdit: () => void;
   onDelete: (p: PinForPage) => void;
   busyEdit: boolean;
   busyDelete: boolean;
 }): JSX.Element {
   const t = useT();
   const ord = String(pin.ordinal).padStart(2, '0');
-  const comment = (pin.commentPreview ?? '').trim();
-  if (isEditing) {
-    return (
-      <li className="pin-item">
-        <form
-          className="pin-edit"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onCommitEdit();
-          }}
-        >
-          <textarea
-            autoFocus
-            className="inline-textarea"
-            value={editDraft}
-            onChange={(e) => onEditDraftChange(e.target.value)}
-          />
-          <div className="card-actions inline">
-            <button type="submit" className="btn btn-primary" disabled={busyEdit}>
-              {busyEdit ? t.session.saving : t.session.save}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={onCancelEdit}>
-              {t.session.cancel}
-            </button>
-          </div>
-        </form>
-      </li>
-    );
-  }
+  const comment = (pin.comment || pin.commentPreview || '').trim();
   return (
     <li className="pin-item">
-      <div className="pin-row">
+      <button type="button" className="pin-row pin-row-button" onClick={() => onFocus(pin)}>
         <span className="pin-ord">#{ord}</span>
         <span className={`pin-comment ${comment ? '' : 'muted'}`}>
           {comment || t.pins.noComment}
         </span>
-        <span className="pin-actions">
-          <button
-            type="button"
-            className="icon-btn-sm"
-            onClick={() => onStartEdit(pin)}
-            title={t.pins.edit}
-          >
-            {t.pins.edit}
-          </button>
-          <button
-            type="button"
-            className="icon-btn-sm is-danger"
-            onClick={() => onDelete(pin)}
-            disabled={busyDelete}
-            title={t.pins.delete}
-          >
-            {busyDelete ? '…' : t.pins.delete}
-          </button>
-        </span>
-      </div>
+      </button>
+      {pin.pageTitle ? <div className="pin-page">{t.pins.viewLabel(pin.pageTitle)}</div> : null}
+      <span className="pin-actions">
+        <button
+          type="button"
+          className="icon-btn-sm"
+          onClick={() => onStartEdit(pin)}
+          disabled={busyEdit}
+          title={t.pins.edit}
+        >
+          {busyEdit ? '…' : t.pins.edit}
+        </button>
+        <button
+          type="button"
+          className="icon-btn-sm is-danger"
+          onClick={() => onDelete(pin)}
+          disabled={busyDelete}
+          title={t.pins.delete}
+        >
+          {busyDelete ? '…' : t.pins.delete}
+        </button>
+      </span>
     </li>
   );
 }

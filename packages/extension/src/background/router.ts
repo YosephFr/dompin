@@ -14,20 +14,23 @@ import {
   listSessions,
   newSession,
   renameSession,
+  resumeSession,
 } from './session.js';
 import {
   deleteAnnotation,
   editAnnotationComment,
   readSessionPins,
   regenerateSessionReadme,
+  updateAnnotation,
   writeAnnotation,
 } from './vault-writer.js';
-import { sendTabCommand, sendTabCommandWithInject } from './tab-bridge.js';
+import { broadcastToTabs, sendTabCommand, sendTabCommandWithInject } from './tab-bridge.js';
 import { captureElement, captureViewport } from './screenshot.js';
 import { gatePickerBySession } from './picker-gate.js';
 import { checkPageAccess } from './page-access.js';
 import { transcribeAudio } from './transcription.js';
 import { cancelRecording, startRecording, stopRecording } from './audio-recorder.js';
+import { snapshotNetworkFailures } from './network-failures.js';
 
 const log = createLogger('router');
 
@@ -105,6 +108,10 @@ async function handle(
       const session = await newSession(req.tabId, req.pageUrl, null, req.name);
       return ok({ session });
     }
+    case 'session:resume': {
+      const session = await resumeSession(req.tabId, req.sessionId, req.pageUrl, req.pageTitle);
+      return ok({ session });
+    }
     case 'session:archive': {
       await archiveSession(req.sessionId);
       return ok({});
@@ -126,10 +133,14 @@ async function handle(
       }
       const session = await ensureSession(tabId, pageUrl, pageTitle);
       try {
-        const result = await writeAnnotation(session, req.payload);
+        const settings = await loadSettings();
+        const network = settings.flags.captureNetworkFailures ? snapshotNetworkFailures(tabId) : [];
+        const payload = network.length ? { ...req.payload, network } : req.payload;
+        const result = await writeAnnotation(session, payload);
         await bumpSessionAnnotation(session.id, +1, pageUrl, pageTitle);
+        await broadcastToTabs({ kind: 'pins:update' });
         return ok({
-          annotationId: req.payload.id,
+          annotationId: payload.id,
           sessionId: session.id,
           ordinal: result.ordinal,
           files: result.files,
@@ -144,6 +155,7 @@ async function handle(
       const result = await deleteAnnotation(session, req.annotationId);
       if (!result.ok) return err(result.error);
       await bumpSessionAnnotation(session.id, -1);
+      await broadcastToTabs({ kind: 'pins:update' });
       return ok({});
     }
     case 'annotation:edit-comment': {
@@ -151,6 +163,19 @@ async function handle(
       if (!session) return err('Annotation not found in any active session');
       const result = await editAnnotationComment(session, req.annotationId, req.comment);
       if (!result.ok) return err(result.error);
+      await broadcastToTabs({ kind: 'pins:update' });
+      return ok({});
+    }
+    case 'annotation:update': {
+      const session = await findSessionForCancel(sender, req.annotationId);
+      if (!session) return err('Annotation not found in any active session');
+      const result = await updateAnnotation(session, req.annotationId, {
+        comment: req.comment,
+        voiceTranscript: req.voiceTranscript ?? null,
+        attachments: req.attachments ?? [],
+      });
+      if (!result.ok) return err(result.error);
+      await broadcastToTabs({ kind: 'pins:update' });
       return ok({});
     }
     case 'capture-viewport':
@@ -220,6 +245,22 @@ async function handle(
       if (!session) return ok({ pins: [] });
       const pins = await readSessionPins(session);
       return ok({ pins });
+    }
+    case 'pin:focus': {
+      const sent = await sendTabCommandWithInject(req.tabId, {
+        kind: 'pin:focus',
+        annotationId: req.annotationId,
+      });
+      if (!sent) return err('PAGE:needs-refresh');
+      return ok({});
+    }
+    case 'pin:edit': {
+      const sent = await sendTabCommandWithInject(req.tabId, {
+        kind: 'pin:edit',
+        annotationId: req.annotationId,
+      });
+      if (!sent) return err('PAGE:needs-refresh');
+      return ok({});
     }
     case 'toggle-picker': {
       const tabId = await resolveActiveTabId(sender);

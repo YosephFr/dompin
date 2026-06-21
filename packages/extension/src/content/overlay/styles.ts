@@ -174,6 +174,13 @@ export const OVERLAY_CSS = `
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.dp-popup-header:active {
+  cursor: grabbing;
 }
 
 .dp-popup-meta {

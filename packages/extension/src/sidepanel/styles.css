@@ -415,6 +415,28 @@ body {
   background: var(--muted);
 }
 
+.pin-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pin-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pin-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .pin-list {
   list-style: none;
   margin: 0;
@@ -425,8 +447,8 @@ body {
 }
 
 .pin-item {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
   padding: 8px 10px;
   border-radius: 8px;
@@ -438,7 +460,23 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  justify-content: space-between;
+  min-width: 0;
+}
+
+.pin-row-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pin-row-button:hover .pin-comment {
+  color: var(--accent);
 }
 
 .pin-ord {
@@ -466,6 +504,18 @@ body {
 .pin-actions {
   display: inline-flex;
   gap: 4px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.pin-page {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icon-btn-sm {
@@ -515,13 +565,22 @@ body {
 
 .recent-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 6px 8px;
   border-radius: 6px;
   background: var(--bg);
   border: 1px solid var(--border);
+}
+
+.recent-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .recent-name {
@@ -538,6 +597,10 @@ body {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.recent-resume {
+  flex-shrink: 0;
 }
 
 .inline-form {

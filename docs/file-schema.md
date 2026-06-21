@@ -104,6 +104,7 @@ Full machine-readable payload. Use this when you want to parse rather than read 
   "meta": {
     "sessionId": "...",
     "sessionName": "landing-1432",
+    "schemaVersion": 2,
     "ordinal": 1,
     "domain": "example.com",
     "writtenAt": 1746461594021,
@@ -155,7 +156,16 @@ Full machine-readable payload. Use this when you want to parse rather than read 
   "console": [
     { "level": "warn", "timestamp": 1746461593011, "message": "..." }
   ],
-  "network": []
+  "network": [
+    {
+      "url": "https://example.com/api/report",
+      "method": "GET",
+      "status": 0,
+      "durationMs": 0,
+      "timestamp": 1746461593011,
+      "error": "net::ERR_FAILED"
+    }
+  ]
 }
 ```
 
@@ -189,4 +199,4 @@ When files are added from the comment popup:
 
 ## Versioning
 
-The schema version is currently `2` and matches `Settings.schemaVersion` in the extension. Backward-incompatible changes to the file layout will bump this version and emit a per-session `SCHEMA.md` describing the changes.
+The schema version is currently `2`, recorded as `meta.schemaVersion` in each annotation JSON, and matches `Settings.schemaVersion` in the extension. Backward-incompatible changes to the file layout will bump this version and emit a per-session `SCHEMA.md` describing the changes.

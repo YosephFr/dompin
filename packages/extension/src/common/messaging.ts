@@ -1,4 +1,5 @@
 import type {
+  AnnotationAttachment,
   AnnotationPayload,
   PinForPage,
   RectInfo,
@@ -24,10 +25,24 @@ export type RequestMessage =
   | { kind: 'session:list'; domain?: string; limit?: number }
   | { kind: 'session:rename'; sessionId: string; newName: string }
   | { kind: 'session:new'; tabId: number; name?: string; pageUrl: string }
+  | {
+      kind: 'session:resume';
+      tabId: number;
+      sessionId: string;
+      pageUrl: string;
+      pageTitle?: string | null;
+    }
   | { kind: 'session:archive'; sessionId: string }
   | { kind: 'annotation:add'; payload: AnnotationPayload }
   | { kind: 'annotation:cancel'; annotationId: string }
   | { kind: 'annotation:edit-comment'; annotationId: string; comment: string }
+  | {
+      kind: 'annotation:update';
+      annotationId: string;
+      comment: string;
+      voiceTranscript?: string | null;
+      attachments?: AnnotationAttachment[];
+    }
   | { kind: 'capture-viewport' }
   | { kind: 'capture-viewport-clean' }
   | { kind: 'capture-element'; rect: RectInfo; dpr: number; padding?: number }
@@ -36,6 +51,8 @@ export type RequestMessage =
   | { kind: 'audio:record-stop' }
   | { kind: 'audio:record-cancel' }
   | { kind: 'pins:for-tab'; tabId?: number }
+  | { kind: 'pin:focus'; tabId: number; annotationId: string }
+  | { kind: 'pin:edit'; tabId: number; annotationId: string }
   | { kind: 'toggle-picker'; mode?: 'sticky' | 'oneShot' }
   | { kind: 'picker:state-broadcast'; active: boolean; mode?: 'sticky' | 'oneShot' }
   | { kind: 'settings:save'; settings: Settings };
@@ -65,6 +82,8 @@ export type TabCommand =
   | { kind: 'picker:close' }
   | { kind: 'picker:query-state' }
   | { kind: 'annotate:context' }
+  | { kind: 'pin:focus'; annotationId: string }
+  | { kind: 'pin:edit'; annotationId: string }
   | { kind: 'pins:update' }
   | { kind: 'picker:needs-session' };
 
