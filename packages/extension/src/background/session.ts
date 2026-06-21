@@ -196,7 +196,11 @@ export async function archiveSession(sessionId: string): Promise<void> {
   notify(null);
 }
 
-export async function listSessions(domain?: string, limit?: number): Promise<SessionListItem[]> {
+export async function listSessions(
+  domain?: string,
+  limit?: number,
+  includePageUrls = true,
+): Promise<SessionListItem[]> {
   const store = await loadStore();
   let items = Object.values(store.sessions);
   if (domain) {
@@ -204,7 +208,8 @@ export async function listSessions(domain?: string, limit?: number): Promise<Ses
   }
   items.sort((a, b) => (b.lastWriteAt ?? b.startedAt) - (a.lastWriteAt ?? a.startedAt));
   if (typeof limit === 'number' && limit > 0) items = items.slice(0, limit);
-  return items.map(toListItem);
+  if (!includePageUrls) return items.map(toListItem);
+  return Promise.all(items.map(toListItemWithPages));
 }
 
 export async function getSessionRecord(sessionId: string): Promise<Session | null> {
@@ -309,5 +314,16 @@ function toSession(rec: SessionRecord): Session {
 }
 
 function toListItem(rec: SessionRecord): SessionListItem {
-  return { ...toSession(rec), pageUrl: rec.pageUrl, pageTitle: rec.pageTitle };
+  return { ...toSession(rec), pageUrl: rec.pageUrl, pageTitle: rec.pageTitle, pageUrls: [] };
+}
+
+async function toListItemWithPages(rec: SessionRecord): Promise<SessionListItem> {
+  const item = toListItem(rec);
+  const urls = new Set<string>();
+  if (rec.pageUrl) urls.add(rec.pageUrl);
+  const pins = await readSessionPins(toSession(rec));
+  for (const pin of pins) {
+    if (pin.url) urls.add(pin.url);
+  }
+  return { ...item, pageUrls: [...urls] };
 }

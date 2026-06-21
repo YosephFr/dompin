@@ -144,6 +144,7 @@ export interface Session {
 export interface SessionListItem extends Session {
   pageUrl: string | null;
   pageTitle: string | null;
+  pageUrls: string[];
 }
 
 export interface AnnotationRecord {

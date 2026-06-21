@@ -67,12 +67,31 @@ export function normalizeViewUrl(href: string): string | null {
   return `${origin}${path}${search ? `?${search}` : ''}${hash}`;
 }
 
+export function normalizeBaseUrl(href: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(href);
+  } catch {
+    return null;
+  }
+  return `${u.protocol}//${u.host.toLowerCase()}`;
+}
+
 /** True when both URLs resolve to the same view (see module docs). */
 export function sameView(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
   const na = normalizeViewUrl(a);
   const nb = normalizeViewUrl(b);
+  if (na === null || nb === null) return a === b;
+  return na === nb;
+}
+
+export function sameBaseUrl(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const na = normalizeBaseUrl(a);
+  const nb = normalizeBaseUrl(b);
   if (na === null || nb === null) return a === b;
   return na === nb;
 }

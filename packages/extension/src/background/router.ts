@@ -300,7 +300,7 @@ async function findSessionForCancel(
     const session = await getActiveSession(tabId);
     if (session) return session;
   }
-  const sessions = await listSessions();
+  const sessions = await listSessions(undefined, undefined, false);
   for (const item of sessions) {
     const pins = await readSessionPins(item);
     if (pins.some((p) => p.id === annotationId)) {

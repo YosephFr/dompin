@@ -1,5 +1,5 @@
 import type { SessionListItem } from '../../common/types.js';
-import { sameView } from '../../common/view-url.js';
+import { sameBaseUrl } from '../../common/view-url.js';
 import { relativeTime } from '../utils.js';
 import { useT } from '../../common/i18n/index.js';
 
@@ -26,7 +26,8 @@ export function RecentSessionsCard({
       </div>
       <ul className="recent-list">
         {filtered.map((s) => {
-          const canResume = sameView(s.pageUrl, currentUrl);
+          const urls = s.pageUrls.length > 0 ? s.pageUrls : s.pageUrl ? [s.pageUrl] : [];
+          const canResume = urls.some((url) => sameBaseUrl(url, currentUrl));
           const isBusy = busyResumeId === s.id;
           return (
             <li key={s.id} className="recent-item">
