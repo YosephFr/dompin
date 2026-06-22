@@ -50,7 +50,7 @@ export const es: Strings = {
     pause: 'Pausar',
     resume: 'Reanudar',
     stop: 'Detener',
-    hint: 'Captura video y micrófono. Marcá frames con ⌘/Ctrl + Shift + clic mientras grabás.',
+    hint: 'Captura video y micrófono. Marcá frames con ⌘ + Ctrl + clic mientras grabás.',
     frameMarks: (n: number) =>
       `${n} frame${n === 1 ? '' : 's'} marcado${n === 1 ? '' : 's'} con atajo.`,
     saved: 'Grabación guardada en esta sesión.',
@@ -156,7 +156,7 @@ export const es: Strings = {
       'Vas a ver un marcador numerado sobre el elemento y el archivo aparece al instante en la carpeta de tu sesión.',
     step6Title: 'Grabá sesiones largas cuando haga falta',
     step6Tip:
-      'Usá Grabar sesión para capturar pantalla y micrófono. Marcá frames del video con ⌘/Ctrl + Shift + clic. El video se guarda primero y, si algo falla al procesarlo, DOMPin muestra Reintentar.',
+      'Usá Grabar sesión para capturar pantalla y micrófono. Marcá frames del video con ⌘ + Ctrl + clic. El video se guarda primero y, si algo falla al procesarlo, DOMPin muestra Reintentar.',
     step7Title: 'Activá Git local solo cuando esté instalado',
     step7Tip:
       'Los checkpoints Git requieren instalar una vez el companion local. Después cada anotación y edición queda versionada dentro de la sesión.',

@@ -5,11 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-06-21
+
+### Changed
+
+- **Starting or resuming a session no longer starts the picker automatically.** A session can now stay idle until the user explicitly starts the picker, recording, or debug capture.
+- **Debug capture now closes the picker before attaching Chrome debugger.** This prevents picker clicks and debug clicks from running at the same time.
+- **Recorded-session frame shortcut is shorter.** Manual frame marks now use `⌘ + Ctrl + click` instead of the longer Shift chord.
+
+### Fixed
+
+- **Debug stop always detaches Chrome debugger.** Cleanup now runs through a guarded stop path so a failed write or screenshot cannot leave the debugger attached to the tab.
+- **Debug start recovers from stale debugger attachments.** If Chrome reports an existing debugger from the same extension, DOMPin detaches and retries once.
+- **Debug screenshots are throttled.** View/click screenshots are limited to avoid Chrome's `MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND` quota while still keeping the event and network timeline.
+
 ## [0.5.1] — 2026-06-21
 
 ### Changed
 
-- **Recorded-session frames are now explicit.** Transcript keyword detection was removed; while recording, press `⌘/Ctrl + Shift + click` on the page to mark exact frame timestamps. The recording README lists each marked second, page, target, and extracted PNG frame.
+- **Recorded-session frames are now explicit.** Transcript keyword detection was removed; while recording, press `⌘ + Ctrl + click` on the page to mark exact frame timestamps. The recording README lists each marked second, page, target, and extracted PNG frame.
 - **Debug capture defaults to a quieter API-focused mode.** By default it records external API-like requests, click/view events, and screenshots, while skipping same-origin noise, duplicate method+URL calls, repeated view captures, and console output.
 - **Aggressive debug capture is now an advanced setting.** Settings can re-enable same-origin/browser-level request capture, console output, screenshots, and duplicate request writes when a deeper trace is needed.
 - **Debug briefs now cross-reference evidence.** `debug/README.md` includes a timeline that links each click/view screenshot to nearby captured network requests.

@@ -365,6 +365,7 @@ async function handle(
       if (!session) return err('Session not found');
       try {
         const settings = await loadSettings();
+        await sendTabCommandWithInject(req.tabId, { kind: 'picker:close' }).catch(() => false);
         const status = await startDebugSession(req.tabId, session, settings.debug);
         await regenerateSessionReadme(session).catch((e) =>
           log.debug('debug start readme regen skipped', e),

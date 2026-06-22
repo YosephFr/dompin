@@ -15,6 +15,7 @@ import { sendTabCommandWithInject } from './tab-bridge.js';
 const log = createLogger('debug-session');
 
 const SCREENSHOT_DELAY_MS = 900;
+const SCREENSHOT_MIN_INTERVAL_MS = 1500;
 const BODY_TEXT_LIMIT = 10_000_000;
 const REQUEST_POST_DATA_LIMIT = 10_000_000;
 
@@ -78,6 +79,7 @@ interface DebugSessionState {
   completedRequests: DebugRequestRecord[];
   currentPageOrigin: string | null;
   pendingScreenshots: Set<Promise<void>>;
+  lastScreenshotAt: number;
   queue: Promise<unknown>;
 }
 
@@ -85,6 +87,7 @@ type DirIterable = AsyncIterable<[string, FileSystemHandle]>;
 
 const sessionsByTab = new Map<number, DebugSessionState>();
 const lastStatusByTab = new Map<number, DebugCaptureStatus>();
+const stopTasksByTab = new Map<number, Promise<DebugCaptureStatus>>();
 let debuggerListenerInstalled = false;
 
 export function setupDebugSessions(): void {
@@ -134,10 +137,12 @@ export async function startDebugSession(
     if (existing.session.id === session.id) return statusFor(existing);
     await stopDebugSession(tabId, existing.session.id, true);
   }
+  const stopping = stopTasksByTab.get(tabId);
+  if (stopping) await stopping;
   lastStatusByTab.delete(tabId);
 
   const target = { tabId };
-  await attachDebugger(target);
+  await attachDebuggerWithRecovery(target);
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   const state: DebugSessionState = {
     tabId,
@@ -159,6 +164,7 @@ export async function startDebugSession(
     completedRequests: [],
     currentPageOrigin: safeOrigin(tab?.url),
     pendingScreenshots: new Set(),
+    lastScreenshotAt: 0,
     queue: Promise.resolve(),
   };
   sessionsByTab.set(tabId, state);
@@ -196,21 +202,41 @@ export async function stopDebugSession(
   sessionId: string,
   detach = true,
 ): Promise<DebugCaptureStatus> {
+  const runningStop = stopTasksByTab.get(tabId);
+  if (runningStop) return runningStop;
   const state = sessionsByTab.get(tabId);
   if (!state || state.session.id !== sessionId) return inactiveStatus();
+  const task = doStopDebugSession(state, detach);
+  stopTasksByTab.set(tabId, task);
+  try {
+    return await task;
+  } finally {
+    stopTasksByTab.delete(tabId);
+  }
+}
+
+async function doStopDebugSession(
+  state: DebugSessionState,
+  detach: boolean,
+): Promise<DebugCaptureStatus> {
   state.stoppedAt = Date.now();
-  sessionsByTab.delete(tabId);
-  await sendTabCommandWithInject(tabId, { kind: 'debug:capture-stop' }).catch(() => false);
-  await Promise.allSettled(Array.from(state.pendingScreenshots));
-  await serialize(state, async () => {
-    await writeOpenRequests(state);
-    await rewriteDebugEvents(state);
-    await writeSessionSummary(state);
-    await writeDebugReadme(state);
-  });
-  if (detach) await detachDebugger(state.target).catch(() => undefined);
+  sessionsByTab.delete(state.tabId);
+  try {
+    await sendTabCommandWithInject(state.tabId, { kind: 'debug:capture-stop' }).catch(() => false);
+    await Promise.allSettled(Array.from(state.pendingScreenshots));
+    await serialize(state, async () => {
+      await writeOpenRequests(state);
+      await rewriteDebugEvents(state);
+      await writeSessionSummary(state);
+      await writeDebugReadme(state);
+    });
+  } catch (e) {
+    state.lastError = e instanceof Error ? e.message : String(e);
+  } finally {
+    if (detach) await detachDebugger(state.target).catch(() => undefined);
+  }
   const status = statusFor(state);
-  lastStatusByTab.set(tabId, status);
+  lastStatusByTab.set(state.tabId, status);
   return status;
 }
 
@@ -274,8 +300,20 @@ async function completeDebugEventScreenshot(
   item: DebugRuntimeEvent,
 ): Promise<void> {
   await delay(SCREENSHOT_DELAY_MS);
+  const now = Date.now();
+  if (now - state.lastScreenshotAt < SCREENSHOT_MIN_INTERVAL_MS) {
+    await serialize(state, async () => {
+      await writeDebugEvent(state, item);
+      await writeSessionSummary(state);
+    });
+    return;
+  }
+  state.lastScreenshotAt = now;
   item.screenshot = await captureDebugScreenshot(state, item).catch((e) => {
-    state.lastError = e instanceof Error ? e.message : String(e);
+    const message = e instanceof Error ? e.message : String(e);
+    state.lastError = message.includes('MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND')
+      ? 'Screenshot skipped: Chrome captureVisibleTab quota reached.'
+      : message;
     return null;
   });
   await serialize(state, async () => {
@@ -726,6 +764,19 @@ function attachDebugger(target: DebuggerTarget): Promise<void> {
       else resolve();
     });
   });
+}
+
+async function attachDebuggerWithRecovery(target: DebuggerTarget): Promise<void> {
+  try {
+    await attachDebugger(target);
+    return;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (!message.includes('Another debugger is already attached')) throw e;
+    await detachDebugger(target).catch(() => undefined);
+    await delay(150);
+    await attachDebugger(target);
+  }
 }
 
 function detachDebugger(target: DebuggerTarget): Promise<void> {

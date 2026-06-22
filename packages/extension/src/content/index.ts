@@ -290,7 +290,7 @@ class ContentApp {
 
   private handleRecordingFrameClick = (ev: MouseEvent): void => {
     if (!this.recordingFrameCaptureActive || !this.recordingFrameSessionId) return;
-    if (!ev.shiftKey || (!ev.metaKey && !ev.ctrlKey)) return;
+    if (!ev.metaKey || !ev.ctrlKey || ev.button !== 0) return;
     const target = ev.target instanceof Element ? ev.target : null;
     if (target && this.isOurDom(target)) return;
     ev.preventDefault();

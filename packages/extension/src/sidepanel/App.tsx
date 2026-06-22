@@ -332,16 +332,6 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     }, 1800);
   }
 
-  async function startPickerForTab(): Promise<void> {
-    const tabId = originRef.current.tabId;
-    if (tabId == null) return;
-    try {
-      await chrome.tabs.sendMessage(tabId, { kind: 'picker:open', mode: 'sticky' });
-    } catch {
-      // tab may not have content script
-    }
-  }
-
   async function stopPickerForTab(): Promise<void> {
     const tabId = originRef.current.tabId;
     if (tabId == null) return;
@@ -372,7 +362,6 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
         setActiveSession(r.session);
         setPins([]);
         await refreshState();
-        await startPickerForTab();
       } else {
         setError(r.error);
       }
@@ -397,7 +386,6 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
       if (r.ok) {
         setActiveSession(r.session);
         await refreshState();
-        await startPickerForTab();
       } else {
         setError(r.error);
       }

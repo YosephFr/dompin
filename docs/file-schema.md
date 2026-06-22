@@ -220,7 +220,7 @@ recording/
 ```
 
 `recording.json` links the saved screen video, microphone narration, transcript, subtitles, and
-manual frame marks. During recording, `⌘/Ctrl + Shift + click` stores a frame mark with the
+manual frame marks. During recording, `⌘ + Ctrl + click` stores a frame mark with the
 recording timestamp, page URL, pointer coordinates, and clicked target metadata. After transcription
 finishes, DOMPin extracts one PNG from the saved video for each mark and lists the exact timestamp in
 `recording/README.md`.
