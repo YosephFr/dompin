@@ -44,6 +44,12 @@ import {
   startSessionRecording,
   stopSessionRecording,
 } from './recording-state.js';
+import {
+  getDebugStatus,
+  recordDebugContentEvent,
+  startDebugSession,
+  stopDebugSession,
+} from './debug-session.js';
 
 const log = createLogger('router');
 
@@ -339,6 +345,44 @@ async function handle(
       await regenerateSessionReadme(session);
       await commitActiveSession(session, 'Save recorded session');
       return ok({});
+    }
+    case 'debug:start': {
+      const tab = await chrome.tabs.get(req.tabId).catch(() => null);
+      const access = checkPageAccess(tab?.url);
+      if (!access.ok) return err(`PAGE:${access.code}`);
+      const session = await getSessionRecord(req.sessionId);
+      if (!session) return err('Session not found');
+      try {
+        const status = await startDebugSession(req.tabId, session);
+        await regenerateSessionReadme(session).catch((e) =>
+          log.debug('debug start readme regen skipped', e),
+        );
+        await commitActiveSession(session, 'Start debug capture session');
+        return ok({ status });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+    case 'debug:stop': {
+      const session = await getSessionRecord(req.sessionId);
+      if (!session) return err('Session not found');
+      try {
+        const status = await stopDebugSession(req.tabId, req.sessionId);
+        await regenerateSessionReadme(session);
+        await commitActiveSession(session, 'Save debug capture session');
+        return ok({ status });
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+    case 'debug:status': {
+      return ok({ status: getDebugStatus(req.tabId) });
+    }
+    case 'debug:event': {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== 'number') return ok({ status: getDebugStatus() });
+      const status = await recordDebugContentEvent(tabId, req.event);
+      return ok({ status });
     }
     case 'git:status': {
       const settings = await loadSettings();

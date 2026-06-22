@@ -24,6 +24,7 @@ import { PinListCard } from './components/PinListCard.js';
 import { RecentSessionsCard } from './components/RecentSessionsCard.js';
 import { PickerHero, type PickerState } from './components/PickerHero.js';
 import { RecordingHero } from './components/RecordingHero.js';
+import { DebugHero } from './components/DebugHero.js';
 
 export function App(): JSX.Element {
   const [locale, setLocale] = useState<'en' | 'es'>(() => resolveLocale('auto'));
@@ -634,6 +635,13 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
               <RecordingHero
                 session={activeSession}
                 frameKeywords={state.settings.recording.frameKeywords}
+                onError={(message) => setError(message || null)}
+              />
+            ) : null}
+            {showHero && activeSession ? (
+              <DebugHero
+                session={activeSession}
+                tabId={origin.tabId}
                 onError={(message) => setError(message || null)}
               />
             ) : null}

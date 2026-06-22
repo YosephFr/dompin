@@ -54,6 +54,19 @@ export const en = {
     retry: 'Retry',
     audioIssue: (message: string) => `Audio note: ${message}`,
   },
+  debug: {
+    idle: 'Debug capture ready',
+    active: 'Debug capture running',
+    start: 'Start debugging',
+    stop: 'Stop debugging',
+    working: 'Working…',
+    hint: 'Captures clicks, views, screenshots, network bodies, and console output.',
+    statsLabel: 'Debug capture counters',
+    events: ' events',
+    network: ' network',
+    console: ' console',
+    lastError: (message: string) => `Debug: ${message}`,
+  },
   session: {
     eyebrow: 'Session',
     none: 'No session yet',
@@ -142,6 +155,9 @@ export const en = {
     step7Title: 'Enable local Git only after setup',
     step7Tip:
       'Git checkpoints require a one-time local companion install. After that, each annotation and edit is versioned inside the session.',
+    step8Title: 'Use debugging capture for technical investigations',
+    step8Tip:
+      'Start Debug capture when you need clicks, view changes, screenshots, API payloads, response bodies, and console output saved continuously in the session.',
   },
   reconnect: {
     message: 'Folder access expired. Reconnect to continue.',

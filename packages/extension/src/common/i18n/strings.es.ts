@@ -56,6 +56,19 @@ export const es: Strings = {
     retry: 'Reintentar',
     audioIssue: (message: string) => `Audio: ${message}`,
   },
+  debug: {
+    idle: 'Depuración lista',
+    active: 'Depuración activa',
+    start: 'Iniciar depuración',
+    stop: 'Detener depuración',
+    working: 'Procesando…',
+    hint: 'Captura clics, vistas, screenshots, cuerpos de red y salida de consola.',
+    statsLabel: 'Contadores de depuración',
+    events: ' eventos',
+    network: ' red',
+    console: ' consola',
+    lastError: (message: string) => `Depuración: ${message}`,
+  },
   session: {
     eyebrow: 'Sesión',
     none: 'Sin sesión',
@@ -145,6 +158,9 @@ export const es: Strings = {
     step7Title: 'Activá Git local solo cuando esté instalado',
     step7Tip:
       'Los checkpoints Git requieren instalar una vez el companion local. Después cada anotación y edición queda versionada dentro de la sesión.',
+    step8Title: 'Usá depuración para investigar problemas técnicos',
+    step8Tip:
+      'Iniciá Depuración cuando necesites guardar continuamente clics, cambios de vista, screenshots, payloads de API, respuestas y salida de consola dentro de la sesión.',
   },
   reconnect: {
     message: 'El acceso a la carpeta expiró. Reconectá para continuar.',

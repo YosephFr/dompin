@@ -880,6 +880,15 @@ body {
   border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
 }
 
+.hero-debug.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%,
+    var(--surface) 100%
+  );
+}
+
 .hero-row {
   display: flex;
   align-items: center;
@@ -984,12 +993,43 @@ body {
   gap: 10px;
 }
 
+.debug-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
 .recording-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--muted);
   flex-shrink: 0;
+}
+
+.debug-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.hero-debug.is-on .debug-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: dp-debug-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes dp-debug-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
 }
 
 .hero-recording.is-recording .recording-dot {
@@ -1031,6 +1071,36 @@ body {
 
 .recording-meter.is-live span {
   opacity: 1;
+}
+
+.debug-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.debug-stats span {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-stats strong {
+  display: block;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 2px;
 }
 
 .recording-controls {

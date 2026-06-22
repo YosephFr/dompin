@@ -1,0 +1,731 @@
+import type {
+  DebugCaptureStatus,
+  DebugContentEvent,
+  Session,
+  WrittenFile,
+} from '../common/types.js';
+import { sanitizeSegment } from '../common/path-sanitize.js';
+import { createLogger } from '../common/logger.js';
+import { ensureWritable } from './vault.js';
+import { captureViewport } from './screenshot.js';
+import { sendTabCommandWithInject } from './tab-bridge.js';
+
+const log = createLogger('debug-session');
+
+const SCREENSHOT_DELAY_MS = 900;
+const BODY_TEXT_LIMIT = 10_000_000;
+const REQUEST_POST_DATA_LIMIT = 10_000_000;
+
+type DebuggerTarget = chrome.debugger.Debuggee;
+
+interface DebugRuntimeEvent {
+  id: number;
+  type: 'click' | 'view';
+  timestamp: number;
+  elapsedMs: number;
+  screenshot: string | null;
+  page: DebugContentEvent['page'];
+  content: DebugContentEvent;
+}
+
+interface DebugRequestRecord {
+  id: number;
+  requestId: string;
+  startedAt: number;
+  elapsedMs: number;
+  type: string;
+  request: Record<string, unknown>;
+  response?: Record<string, unknown>;
+  finishedAt?: number;
+  durationMs?: number;
+  error?: string;
+  requestBodyPath?: string;
+  responseBodyPath?: string;
+  responseBodyError?: string;
+}
+
+interface DebugSessionState {
+  tabId: number;
+  target: DebuggerTarget;
+  session: Session;
+  startedAt: number;
+  stoppedAt: number | null;
+  eventSeq: number;
+  requestSeq: number;
+  consoleSeq: number;
+  networkCount: number;
+  consoleCount: number;
+  lastError: string | null;
+  requests: Map<string, DebugRequestRecord>;
+  pendingScreenshots: Set<Promise<void>>;
+  queue: Promise<unknown>;
+}
+
+type DirIterable = AsyncIterable<[string, FileSystemHandle]>;
+
+const sessionsByTab = new Map<number, DebugSessionState>();
+const lastStatusByTab = new Map<number, DebugCaptureStatus>();
+let debuggerListenerInstalled = false;
+
+export function setupDebugSessions(): void {
+  if (debuggerListenerInstalled) return;
+  debuggerListenerInstalled = true;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    if (typeof source.tabId !== 'number') return;
+    const state = sessionsByTab.get(source.tabId);
+    if (!state) return;
+    void handleDebuggerEvent(state, method, (params ?? {}) as Record<string, unknown>);
+  });
+  chrome.debugger.onDetach.addListener((source, reason) => {
+    if (typeof source.tabId !== 'number') return;
+    const state = sessionsByTab.get(source.tabId);
+    if (!state) return;
+    state.lastError = reason ? `Debugger detached: ${reason}` : 'Debugger detached.';
+    void stopDebugSession(source.tabId, state.session.id, false).catch((e) =>
+      log.warn('detach stop failed', e),
+    );
+  });
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
+    const state = sessionsByTab.get(tabId);
+    if (!state) return;
+    if (info.status === 'complete') {
+      void sendTabCommandWithInject(tabId, {
+        kind: 'debug:capture-start',
+        startedAt: state.startedAt,
+      });
+    }
+  });
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    const state = sessionsByTab.get(tabId);
+    if (!state) return;
+    void stopDebugSession(tabId, state.session.id, false).catch((e) =>
+      log.warn('tab removed stop failed', e),
+    );
+  });
+}
+
+export async function startDebugSession(
+  tabId: number,
+  session: Session,
+): Promise<DebugCaptureStatus> {
+  const existing = sessionsByTab.get(tabId);
+  if (existing) {
+    if (existing.session.id === session.id) return statusFor(existing);
+    await stopDebugSession(tabId, existing.session.id, true);
+  }
+  lastStatusByTab.delete(tabId);
+
+  const target = { tabId };
+  await attachDebugger(target);
+  const state: DebugSessionState = {
+    tabId,
+    target,
+    session,
+    startedAt: Date.now(),
+    stoppedAt: null,
+    eventSeq: 0,
+    requestSeq: 0,
+    consoleSeq: 0,
+    networkCount: 0,
+    consoleCount: 0,
+    lastError: null,
+    requests: new Map(),
+    pendingScreenshots: new Set(),
+    queue: Promise.resolve(),
+  };
+  sessionsByTab.set(tabId, state);
+  try {
+    await ensureDebugScaffold(state);
+    await Promise.all([
+      sendDebuggerCommand(target, 'Network.enable', {
+        maxPostDataSize: REQUEST_POST_DATA_LIMIT,
+      }),
+      sendDebuggerCommand(target, 'Runtime.enable'),
+      sendDebuggerCommand(target, 'Log.enable'),
+      sendDebuggerCommand(target, 'Page.enable'),
+    ]);
+  } catch (e) {
+    sessionsByTab.delete(tabId);
+    await detachDebugger(target).catch(() => undefined);
+    throw e;
+  }
+
+  await sendTabCommandWithInject(tabId, {
+    kind: 'debug:capture-start',
+    startedAt: state.startedAt,
+  });
+  await writeSessionSummary(state);
+  return statusFor(state);
+}
+
+export async function stopDebugSession(
+  tabId: number,
+  sessionId: string,
+  detach = true,
+): Promise<DebugCaptureStatus> {
+  const state = sessionsByTab.get(tabId);
+  if (!state || state.session.id !== sessionId) return inactiveStatus();
+  state.stoppedAt = Date.now();
+  sessionsByTab.delete(tabId);
+  await sendTabCommandWithInject(tabId, { kind: 'debug:capture-stop' }).catch(() => false);
+  await Promise.allSettled(Array.from(state.pendingScreenshots));
+  await serialize(state, async () => {
+    await writeOpenRequests(state);
+    await writeSessionSummary(state);
+    await writeDebugReadme(state);
+  });
+  if (detach) await detachDebugger(state.target).catch(() => undefined);
+  const status = statusFor(state);
+  lastStatusByTab.set(tabId, status);
+  return status;
+}
+
+export function getDebugStatus(tabId?: number): DebugCaptureStatus {
+  if (typeof tabId === 'number') {
+    const state = sessionsByTab.get(tabId);
+    return state ? statusFor(state) : (lastStatusByTab.get(tabId) ?? inactiveStatus());
+  }
+  const state = sessionsByTab.values().next().value as DebugSessionState | undefined;
+  return state ? statusFor(state) : inactiveStatus();
+}
+
+export async function recordDebugContentEvent(
+  tabId: number,
+  event: DebugContentEvent,
+): Promise<DebugCaptureStatus> {
+  const state = sessionsByTab.get(tabId);
+  if (!state) return inactiveStatus();
+  const id = state.eventSeq + 1;
+  state.eventSeq = id;
+  const item: DebugRuntimeEvent = {
+    id,
+    type: event.type,
+    timestamp: event.timestamp,
+    elapsedMs: Math.max(0, event.timestamp - state.startedAt),
+    screenshot: null,
+    page: event.page,
+    content: event,
+  };
+  await serialize(state, async () => {
+    await writeDebugEvent(state, item);
+    await writeSessionSummary(state);
+  });
+  const screenshotJob = completeDebugEventScreenshot(state, item);
+  state.pendingScreenshots.add(screenshotJob);
+  void screenshotJob.finally(() => state.pendingScreenshots.delete(screenshotJob));
+  return statusFor(state);
+}
+
+async function completeDebugEventScreenshot(
+  state: DebugSessionState,
+  item: DebugRuntimeEvent,
+): Promise<void> {
+  await delay(SCREENSHOT_DELAY_MS);
+  item.screenshot = await captureDebugScreenshot(state, item).catch((e) => {
+    state.lastError = e instanceof Error ? e.message : String(e);
+    return null;
+  });
+  await serialize(state, async () => {
+    await writeDebugEvent(state, item);
+    await writeSessionSummary(state);
+  });
+}
+
+async function handleDebuggerEvent(
+  state: DebugSessionState,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<void> {
+  try {
+    if (method === 'Network.requestWillBeSent') {
+      await handleRequestWillBeSent(state, params);
+    } else if (method === 'Network.responseReceived') {
+      await handleResponseReceived(state, params);
+    } else if (method === 'Network.loadingFinished') {
+      await handleLoadingFinished(state, params);
+    } else if (method === 'Network.loadingFailed') {
+      await handleLoadingFailed(state, params);
+    } else if (method === 'Runtime.consoleAPICalled') {
+      await handleConsoleCalled(state, params);
+    } else if (method === 'Runtime.exceptionThrown') {
+      await handleExceptionThrown(state, params);
+    } else if (method === 'Log.entryAdded') {
+      await handleLogEntry(state, params);
+    }
+  } catch (e) {
+    state.lastError = e instanceof Error ? e.message : String(e);
+    log.warn('debugger event failed', method, e);
+  }
+}
+
+async function handleRequestWillBeSent(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const requestId = stringValue(params['requestId']);
+  if (!requestId) return;
+  const request = objectValue(params['request']);
+  const startedAt = Number(params['wallTime'])
+    ? Math.round(Number(params['wallTime']) * 1000)
+    : Date.now();
+  const record: DebugRequestRecord = {
+    id: state.requestSeq + 1,
+    requestId,
+    startedAt,
+    elapsedMs: Math.max(0, startedAt - state.startedAt),
+    type: stringValue(params['type']) || 'Other',
+    request: {
+      url: stringValue(request['url']),
+      method: stringValue(request['method']) || 'GET',
+      headers: request['headers'] ?? {},
+      hasPostData: Boolean(request['hasPostData']),
+      mixedContentType: request['mixedContentType'] ?? null,
+      initiator: params['initiator'] ?? null,
+      documentURL: stringValue(params['documentURL']),
+    },
+  };
+  state.requestSeq = record.id;
+  state.requests.set(requestId, record);
+  await persistRequestPostData(state, record, stringValue(request['postData']));
+  await serialize(state, () => writeNetworkRecord(state, record));
+}
+
+async function handleResponseReceived(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const record = requestRecord(state, params['requestId']);
+  if (!record) return;
+  const response = objectValue(params['response']);
+  record.response = {
+    url: stringValue(response['url']),
+    status: Number(response['status']) || 0,
+    statusText: stringValue(response['statusText']),
+    headers: response['headers'] ?? {},
+    mimeType: stringValue(response['mimeType']),
+    remoteIPAddress: response['remoteIPAddress'] ?? null,
+    remotePort: response['remotePort'] ?? null,
+    protocol: response['protocol'] ?? null,
+    fromDiskCache: Boolean(response['fromDiskCache']),
+    fromServiceWorker: Boolean(response['fromServiceWorker']),
+    timing: response['timing'] ?? null,
+  };
+  await serialize(state, () => writeNetworkRecord(state, record));
+}
+
+async function handleLoadingFinished(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const record = requestRecord(state, params['requestId']);
+  if (!record) return;
+  record.finishedAt = Date.now();
+  record.durationMs = Math.max(0, record.finishedAt - record.startedAt);
+  await persistResponseBody(state, record);
+  state.networkCount += 1;
+  state.requests.delete(record.requestId);
+  await serialize(state, async () => {
+    await writeNetworkRecord(state, record);
+    await writeSessionSummary(state);
+  });
+}
+
+async function handleLoadingFailed(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const record = requestRecord(state, params['requestId']);
+  if (!record) return;
+  record.finishedAt = Date.now();
+  record.durationMs = Math.max(0, record.finishedAt - record.startedAt);
+  record.error = stringValue(params['errorText']) || 'Network loading failed.';
+  state.networkCount += 1;
+  state.requests.delete(record.requestId);
+  await serialize(state, async () => {
+    await writeNetworkRecord(state, record);
+    await writeSessionSummary(state);
+  });
+}
+
+async function handleConsoleCalled(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const entry = {
+    type: stringValue(params['type']) || 'log',
+    timestamp: Number(params['timestamp']) || Date.now(),
+    elapsedMs: Math.max(0, (Number(params['timestamp']) || Date.now()) - state.startedAt),
+    args: Array.isArray(params['args'])
+      ? params['args'].map((arg) => serializeRemoteObject(arg))
+      : [],
+    stackTrace: params['stackTrace'] ?? null,
+  };
+  await writeConsoleItem(state, entry);
+}
+
+async function handleExceptionThrown(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const details = objectValue(params['exceptionDetails']);
+  const entry = {
+    type: 'exception',
+    timestamp: Date.now(),
+    elapsedMs: Math.max(0, Date.now() - state.startedAt),
+    text: stringValue(details['text']),
+    url: stringValue(details['url']),
+    lineNumber: details['lineNumber'] ?? null,
+    columnNumber: details['columnNumber'] ?? null,
+    exception: serializeRemoteObject(details['exception']),
+    stackTrace: details['stackTrace'] ?? null,
+  };
+  await writeConsoleItem(state, entry);
+}
+
+async function handleLogEntry(
+  state: DebugSessionState,
+  params: Record<string, unknown>,
+): Promise<void> {
+  const entry = objectValue(params['entry']);
+  await writeConsoleItem(state, {
+    type: stringValue(entry['level']) || 'log',
+    timestamp: Number(entry['timestamp']) || Date.now(),
+    elapsedMs: Math.max(0, (Number(entry['timestamp']) || Date.now()) - state.startedAt),
+    source: entry['source'] ?? null,
+    text: stringValue(entry['text']),
+    url: stringValue(entry['url']),
+    lineNumber: entry['lineNumber'] ?? null,
+  });
+}
+
+async function writeConsoleItem(state: DebugSessionState, item: Record<string, unknown>) {
+  state.consoleSeq += 1;
+  state.consoleCount += 1;
+  const seq = state.consoleSeq;
+  await serialize(state, async () => {
+    const dirs = await getDebugDirs(state.session);
+    await writeJson(dirs.console, `${seqName(seq)}.json`, {
+      id: seq,
+      sessionId: state.session.id,
+      ...item,
+    });
+    await writeSessionSummary(state);
+  });
+}
+
+async function persistRequestPostData(
+  state: DebugSessionState,
+  record: DebugRequestRecord,
+  postData: string,
+): Promise<void> {
+  if (!postData) return;
+  const body = limitText(postData, REQUEST_POST_DATA_LIMIT);
+  const dirs = await getDebugDirs(state.session);
+  const name = `${networkFileBase(record)}.request.txt`;
+  await writeText(dirs.network, name, body.text);
+  record.requestBodyPath = `./network/${name}`;
+  if (body.truncated) record.request['postDataTruncated'] = true;
+}
+
+async function persistResponseBody(
+  state: DebugSessionState,
+  record: DebugRequestRecord,
+): Promise<void> {
+  if (!record.response) return;
+  try {
+    const body = (await sendDebuggerCommand(state.target, 'Network.getResponseBody', {
+      requestId: record.requestId,
+    })) as { body?: unknown; base64Encoded?: unknown };
+    const raw = stringValue(body.body);
+    if (!raw) return;
+    const limited = limitText(raw, BODY_TEXT_LIMIT);
+    const dirs = await getDebugDirs(state.session);
+    const name = `${networkFileBase(record)}.response.${body.base64Encoded ? 'base64' : 'txt'}`;
+    await writeText(dirs.network, name, limited.text);
+    record.responseBodyPath = `./network/${name}`;
+    record.response['bodyBase64Encoded'] = Boolean(body.base64Encoded);
+    if (limited.truncated) record.response['bodyTruncated'] = true;
+  } catch (e) {
+    record.responseBodyError = e instanceof Error ? e.message : String(e);
+  }
+}
+
+async function writeOpenRequests(state: DebugSessionState): Promise<void> {
+  for (const record of state.requests.values()) {
+    record.finishedAt = Date.now();
+    record.durationMs = Math.max(0, record.finishedAt - record.startedAt);
+    record.error = record.error ?? 'Still in flight when debug capture stopped.';
+    await writeNetworkRecord(state, record);
+  }
+  state.requests.clear();
+}
+
+async function captureDebugScreenshot(
+  state: DebugSessionState,
+  item: DebugRuntimeEvent,
+): Promise<string> {
+  const dataUrl = await captureViewport(state.tabId);
+  const dirs = await getDebugDirs(state.session);
+  const name = `${seqName(item.id)}-${item.type}.png`;
+  await writeDataUrl(dirs.screenshots, name, dataUrl);
+  return `./screenshots/${name}`;
+}
+
+async function writeDebugEvent(state: DebugSessionState, item: DebugRuntimeEvent): Promise<void> {
+  const dirs = await getDebugDirs(state.session);
+  await writeJson(dirs.events, `${seqName(item.id)}-${item.type}.json`, {
+    sessionId: state.session.id,
+    sessionName: state.session.name,
+    ...item,
+  });
+}
+
+async function writeNetworkRecord(
+  state: DebugSessionState,
+  record: DebugRequestRecord,
+): Promise<void> {
+  const dirs = await getDebugDirs(state.session);
+  await writeJson(dirs.network, `${networkFileBase(record)}.json`, {
+    sessionId: state.session.id,
+    sessionName: state.session.name,
+    ...record,
+  });
+}
+
+async function writeSessionSummary(state: DebugSessionState): Promise<void> {
+  const dirs = await getDebugDirs(state.session);
+  await writeJson(dirs.root, 'session.json', {
+    schemaVersion: 1,
+    sessionId: state.session.id,
+    sessionName: state.session.name,
+    domain: state.session.domain,
+    startedAt: state.startedAt,
+    stoppedAt: state.stoppedAt,
+    active: sessionsByTab.get(state.tabId) === state,
+    elapsedMs: Math.max(0, (state.stoppedAt ?? Date.now()) - state.startedAt),
+    counts: {
+      events: state.eventSeq,
+      network: state.networkCount,
+      console: state.consoleCount,
+      inFlightRequests: state.requests.size,
+    },
+    paths: {
+      events: './events/',
+      screenshots: './screenshots/',
+      network: './network/',
+      console: './console/',
+    },
+    lastError: state.lastError,
+  });
+}
+
+async function writeDebugReadme(state: DebugSessionState): Promise<void> {
+  const dirs = await getDebugDirs(state.session);
+  const lines: string[] = [];
+  lines.push(`# Debug capture - ${state.session.name}`);
+  lines.push('');
+  lines.push(`- Started: ${new Date(state.startedAt).toISOString()}`);
+  if (state.stoppedAt) lines.push(`- Stopped: ${new Date(state.stoppedAt).toISOString()}`);
+  lines.push(`- Duration: ${formatDuration((state.stoppedAt ?? Date.now()) - state.startedAt)}`);
+  lines.push(`- View/click events: ${state.eventSeq}`);
+  lines.push(`- Completed network requests: ${state.networkCount}`);
+  lines.push(`- Console entries: ${state.consoleCount}`);
+  if (state.lastError) lines.push(`- Last error: ${state.lastError}`);
+  lines.push('');
+  lines.push('## Files');
+  lines.push('');
+  lines.push('- [Session summary](./session.json)');
+  lines.push('- [Events](./events/)');
+  lines.push('- [Screenshots](./screenshots/)');
+  lines.push('- [Network](./network/)');
+  lines.push('- [Console](./console/)');
+  lines.push('');
+  await writeText(dirs.root, 'README.md', lines.join('\n'));
+}
+
+async function ensureDebugScaffold(state: DebugSessionState): Promise<void> {
+  const dirs = await getDebugDirs(state.session);
+  await clearDirectory(dirs.root);
+  await getDebugDirs(state.session);
+  await writeDebugReadme(state);
+}
+
+async function getDebugDirs(session: Session): Promise<{
+  root: FileSystemDirectoryHandle;
+  events: FileSystemDirectoryHandle;
+  screenshots: FileSystemDirectoryHandle;
+  network: FileSystemDirectoryHandle;
+  console: FileSystemDirectoryHandle;
+}> {
+  const root = await ensureWritable();
+  const domain = await root.getDirectoryHandle(session.domainFolder, { create: true });
+  const sessionDir = await domain.getDirectoryHandle(session.folder, { create: true });
+  const debug = await sessionDir.getDirectoryHandle('debug', { create: true });
+  return {
+    root: debug,
+    events: await debug.getDirectoryHandle('events', { create: true }),
+    screenshots: await debug.getDirectoryHandle('screenshots', { create: true }),
+    network: await debug.getDirectoryHandle('network', { create: true }),
+    console: await debug.getDirectoryHandle('console', { create: true }),
+  };
+}
+
+async function clearDirectory(dir: FileSystemDirectoryHandle): Promise<void> {
+  for await (const [name] of dir as unknown as DirIterable) {
+    await dir.removeEntry(name, { recursive: true });
+  }
+}
+
+function statusFor(state: DebugSessionState): DebugCaptureStatus {
+  return {
+    active: sessionsByTab.get(state.tabId) === state,
+    sessionId: state.session.id,
+    startedAt: state.startedAt,
+    elapsedMs: Math.max(0, (state.stoppedAt ?? Date.now()) - state.startedAt),
+    eventCount: state.eventSeq,
+    networkCount: state.networkCount,
+    consoleCount: state.consoleCount,
+    lastError: state.lastError,
+  };
+}
+
+function inactiveStatus(): DebugCaptureStatus {
+  return {
+    active: false,
+    sessionId: null,
+    startedAt: null,
+    elapsedMs: 0,
+    eventCount: 0,
+    networkCount: 0,
+    consoleCount: 0,
+    lastError: null,
+  };
+}
+
+function attachDebugger(target: DebuggerTarget): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach(target, '1.3', () => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message ?? 'Could not attach debugger.'));
+      else resolve();
+    });
+  });
+}
+
+function detachDebugger(target: DebuggerTarget): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.debugger.detach(target, () => resolve());
+  });
+}
+
+function sendDebuggerCommand(
+  target: DebuggerTarget,
+  method: string,
+  commandParams?: Record<string, unknown>,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand(target, method, commandParams, (result) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message ?? `${method} failed.`));
+      else resolve(result);
+    });
+  });
+}
+
+function serialize<T>(state: DebugSessionState, fn: () => Promise<T>): Promise<T> {
+  const next = state.queue.then(fn, fn);
+  state.queue = next.catch(() => undefined);
+  return next;
+}
+
+async function writeJson(
+  dir: FileSystemDirectoryHandle,
+  name: string,
+  value: unknown,
+): Promise<number> {
+  return writeText(dir, name, JSON.stringify(value, null, 2));
+}
+
+async function writeText(
+  dir: FileSystemDirectoryHandle,
+  name: string,
+  text: string,
+): Promise<number> {
+  const handle = await dir.getFileHandle(name, { create: true });
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(text);
+    return new Blob([text]).size;
+  } finally {
+    await writable.close();
+  }
+}
+
+async function writeDataUrl(
+  dir: FileSystemDirectoryHandle,
+  name: string,
+  dataUrl: string,
+): Promise<WrittenFile> {
+  const blob = await fetch(dataUrl).then((r) => r.blob());
+  const handle = await dir.getFileHandle(name, { create: true });
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(blob);
+  } finally {
+    await writable.close();
+  }
+  return { relativePath: name, bytes: blob.size };
+}
+
+function requestRecord(state: DebugSessionState, requestId: unknown): DebugRequestRecord | null {
+  const id = stringValue(requestId);
+  return id ? (state.requests.get(id) ?? null) : null;
+}
+
+function serializeRemoteObject(value: unknown): unknown {
+  const obj = objectValue(value);
+  if ('value' in obj) return obj['value'];
+  if (typeof obj['description'] === 'string') return obj['description'];
+  if (typeof obj['unserializableValue'] === 'string') return obj['unserializableValue'];
+  if (typeof obj['type'] === 'string') return `[${obj['type']}]`;
+  return value ?? null;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function limitText(text: string, max: number): { text: string; truncated: boolean } {
+  if (text.length <= max) return { text, truncated: false };
+  return { text: text.slice(0, max), truncated: true };
+}
+
+function networkFileBase(record: DebugRequestRecord): string {
+  const method = String(record.request['method'] ?? 'GET').toLowerCase();
+  const url = String(record.request['url'] ?? 'request');
+  const name = sanitizeSegment(url.replace(/^https?:\/\//, ''), 'request').slice(0, 60);
+  return `${seqName(record.id)}-${method}-${name}`;
+}
+
+function seqName(id: number): string {
+  return String(id).padStart(4, '0');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m ${seconds}s`;
+  }
+  return `${minutes}m ${seconds}s`;
+}

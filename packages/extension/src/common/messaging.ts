@@ -1,5 +1,7 @@
 import type {
   AnnotationAttachment,
+  DebugCaptureStatus,
+  DebugContentEvent,
   AnnotationPayload,
   PinForPage,
   RectInfo,
@@ -56,6 +58,10 @@ export type RequestMessage =
   | { kind: 'recording:session-start'; sessionId: string; startedAt: number }
   | { kind: 'recording:session-stop'; sessionId: string }
   | { kind: 'recording:finalize'; sessionId: string }
+  | { kind: 'debug:start'; tabId: number; sessionId: string }
+  | { kind: 'debug:stop'; tabId: number; sessionId: string }
+  | { kind: 'debug:status'; tabId?: number }
+  | { kind: 'debug:event'; event: DebugContentEvent }
   | { kind: 'git:status' }
   | { kind: 'pins:for-tab'; tabId?: number }
   | { kind: 'pin:focus'; tabId: number; annotationId: string }
@@ -98,6 +104,7 @@ export type TranscriptionResp = Resp<TranscriptResult | RecordedAudioResult>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 export type RecordingSaveResp = Resp<{ files: { relativePath: string; bytes: number }[] }>;
 export type GitStatusResp = Resp<{ available: boolean; message: string }>;
+export type DebugStatusResp = Resp<{ status: DebugCaptureStatus }>;
 
 export type TabCommand =
   | { kind: 'picker:toggle'; mode?: 'sticky' | 'oneShot' }
@@ -109,6 +116,8 @@ export type TabCommand =
   | { kind: 'pin:edit'; annotationId: string }
   | { kind: 'pins:set-visible'; visible: boolean }
   | { kind: 'pins:update' }
+  | { kind: 'debug:capture-start'; startedAt: number }
+  | { kind: 'debug:capture-stop' }
   | { kind: 'picker:needs-session' };
 
 export type BroadcastMessage =

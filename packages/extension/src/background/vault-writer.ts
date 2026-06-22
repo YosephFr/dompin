@@ -243,7 +243,11 @@ async function regenerateSessionReadmeFromDir(
   dir: FileSystemDirectoryHandle,
 ): Promise<void> {
   const entries = await readSessionIndex(dir);
-  const md = renderSessionReadme(session, entries, await hasRecording(dir));
+  const [recordingAvailable, debugAvailable] = await Promise.all([
+    hasRecording(dir),
+    hasDebug(dir),
+  ]);
+  const md = renderSessionReadme(session, entries, recordingAvailable, debugAvailable);
   await writeText(dir, 'README.md', md);
 }
 
@@ -404,6 +408,16 @@ async function hasRecording(dir: FileSystemDirectoryHandle): Promise<boolean> {
   try {
     const recordingDir = await dir.getDirectoryHandle('recording');
     await recordingDir.getFileHandle('recording.json');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasDebug(dir: FileSystemDirectoryHandle): Promise<boolean> {
+  try {
+    const debugDir = await dir.getDirectoryHandle('debug');
+    await debugDir.getFileHandle('session.json');
     return true;
   } catch {
     return false;
@@ -717,6 +731,7 @@ function renderSessionReadme(
   session: Session,
   entries: IndexEntry[],
   recordingAvailable: boolean,
+  debugAvailable: boolean,
 ): string {
   const lines: string[] = [];
   const startedAt = new Date(session.startedAt).toISOString();
@@ -744,6 +759,12 @@ function renderSessionReadme(
     lines.push('## Recording');
     lines.push('');
     lines.push('- [Recorded session assets](./recording/README.md)');
+    lines.push('');
+  }
+  if (debugAvailable) {
+    lines.push('## Debug capture');
+    lines.push('');
+    lines.push('- [Debug capture assets](./debug/README.md)');
     lines.push('');
   }
   if (entries.length) {

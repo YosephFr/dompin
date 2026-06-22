@@ -1,4 +1,4 @@
-import type { RectInfo, PinForPage } from '../common/types.js';
+import type { DebugClickTarget, RectInfo, PinForPage } from '../common/types.js';
 import type { TabCommand } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { isOriginAllowed, type Settings } from '../common/settings.js';
@@ -26,6 +26,8 @@ import {
   type PinTarget,
 } from './capture/index.js';
 import { uniqueSelector } from './capture/selector.js';
+import { capturePage } from './capture/page.js';
+import { captureElement } from './capture/element.js';
 
 const log = createLogger('content');
 
@@ -43,6 +45,7 @@ class ContentApp {
   private lastRightClickedEl: Element | null = null;
   private urlPollId: number | null = null;
   private stopping = false;
+  private debugCaptureActive = false;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -220,6 +223,95 @@ class ContentApp {
     this.stopPicker();
   }
 
+  private startDebugCapture(_startedAt: number): void {
+    if (!this.debugCaptureActive) {
+      this.debugCaptureActive = true;
+      document.addEventListener('click', this.handleDebugClick, true);
+    }
+    this.sendDebugView('start', null);
+  }
+
+  private stopDebugCapture(): void {
+    if (!this.debugCaptureActive) return;
+    this.debugCaptureActive = false;
+    document.removeEventListener('click', this.handleDebugClick, true);
+  }
+
+  private handleDebugClick = (ev: MouseEvent): void => {
+    if (!this.debugCaptureActive) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (target && this.isOurDom(target)) return;
+    const timestamp = Date.now();
+    const payload = {
+      kind: 'debug:event' as const,
+      event: {
+        type: 'click' as const,
+        timestamp,
+        page: capturePage(),
+        pointer: {
+          x: ev.clientX,
+          y: ev.clientY,
+          button: ev.button,
+          buttons: ev.buttons,
+          altKey: ev.altKey,
+          ctrlKey: ev.ctrlKey,
+          metaKey: ev.metaKey,
+          shiftKey: ev.shiftKey,
+        },
+        target: target ? this.captureDebugTarget(target) : null,
+      },
+    };
+    void sendRequest(payload);
+  };
+
+  private sendDebugView(trigger: 'start' | 'url-change' | 'reload', previousUrl: string | null) {
+    if (!this.debugCaptureActive) return;
+    void sendRequest({
+      kind: 'debug:event',
+      event: {
+        type: 'view',
+        timestamp: Date.now(),
+        trigger,
+        previousUrl,
+        page: capturePage(),
+      },
+    });
+  }
+
+  private captureDebugTarget(el: Element): DebugClickTarget | null {
+    try {
+      const captured = captureElement(el, {
+        enableReactFiber: this.settings.flags.enableReactFiber,
+      });
+      return {
+        selector: captured.selector,
+        xpath: captured.xpath,
+        tag: captured.tag,
+        id: captured.id,
+        classes: captured.classes,
+        role: captured.role,
+        ariaLabel: captured.ariaLabel,
+        textPreview: captured.textPreview,
+        outerHTMLPreview: captured.outerHTMLPreview,
+        boundingRect: captured.boundingRect,
+      };
+    } catch {
+      const rect = el.getBoundingClientRect();
+      return {
+        selector: safeSelector(el),
+        xpath: null,
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        classes: Array.from(el.classList),
+        role: el.getAttribute('role'),
+        ariaLabel: el.getAttribute('aria-label'),
+        textPreview: (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || null,
+        outerHTMLPreview: el.outerHTML.slice(0, 800),
+        boundingRect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      };
+    }
+  }
+
   private handleMarkerClick(id: string, ev: MouseEvent): void {
     ev.preventDefault();
     ev.stopPropagation();
@@ -380,6 +472,14 @@ class ContentApp {
           void this.refreshMarkers();
           sendResponse({ ok: true });
           return false;
+        case 'debug:capture-start':
+          this.startDebugCapture(cmd.startedAt);
+          sendResponse({ ok: true });
+          return false;
+        case 'debug:capture-stop':
+          this.stopDebugCapture();
+          sendResponse({ ok: true });
+          return false;
       }
       return false;
     });
@@ -413,12 +513,14 @@ class ContentApp {
   private setupUrlChangeListener(): void {
     const checkUrl = () => {
       if (location.href !== this.currentUrl) {
+        const previousUrl = this.currentUrl;
         this.currentUrl = location.href;
         // Scope markers to the new view immediately, then refetch. A second
         // delayed refresh catches SPA views whose content mounts a beat later.
         this.markers.setView(this.currentUrl);
         void this.refreshMarkers();
         window.setTimeout(() => void this.refreshMarkers(), 450);
+        this.sendDebugView('url-change', previousUrl);
       }
     };
     addEventListener('popstate', checkUrl);
@@ -454,6 +556,7 @@ class ContentApp {
       this.urlPollId = null;
     }
     this.picker.stop();
+    this.stopDebugCapture();
     this.popup.destroy();
     this.markers.destroy();
     this.regionRect.destroy();
@@ -468,6 +571,14 @@ function previewSelector(el: Element): string {
     return sel.length > 80 ? sel.slice(0, 77) + '...' : sel;
   } catch {
     return el.tagName.toLowerCase();
+  }
+}
+
+function safeSelector(el: Element): string | null {
+  try {
+    return uniqueSelector(el);
+  } catch {
+    return null;
   }
 }
 

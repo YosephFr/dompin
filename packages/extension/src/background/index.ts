@@ -5,6 +5,7 @@ import { onSessionChange, setupSessionLifecycle } from './session.js';
 import { broadcastToTabs } from './tab-bridge.js';
 import { createLogger } from '../common/logger.js';
 import { setupNetworkFailures } from './network-failures.js';
+import { setupDebugSessions } from './debug-session.js';
 
 const log = createLogger('bg');
 
@@ -14,6 +15,7 @@ function bootstrap(): void {
   setupRouter();
   setupSessionLifecycle();
   setupNetworkFailures();
+  setupDebugSessions();
   onSessionChange(() => {
     void broadcastToTabs({ kind: 'pins:update' });
   });

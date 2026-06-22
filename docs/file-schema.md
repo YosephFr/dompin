@@ -15,6 +15,17 @@ This document is the integration contract between DOMPin and any tool that reads
       01.json
       01.attachments/
         screenshot.png
+      recording/
+        recording.json
+        transcript.txt
+        transcript.srt
+        frames/
+      debug/
+        session.json
+        events/
+        screenshots/
+        network/
+        console/
       02.md
       02.element.png
       02.viewport.png
@@ -190,6 +201,62 @@ When files are added from the comment popup:
 - `NN.json` lists each attachment with `id`, original `name`, `mimeType`, original `size`, relative `path`, and written `bytes`.
 - Attachment filenames are sanitized and de-duplicated within the annotation folder.
 
+## Recorded sessions
+
+When the user records a session, DOMPin writes media and transcript assets under
+`recording/` in the session folder:
+
+```
+recording/
+  README.md
+  recording.json
+  session.webm
+  narration.webm
+  transcript.txt
+  transcript.srt
+  frames/
+    frames.json
+    frame-01-0004s.png
+    frame-01-0004s.webm
+```
+
+`recording.json` links the saved screen video, microphone narration, transcript, subtitles, and
+keyword-triggered frames. Frames are extracted after transcription when a configured keyword or
+phrase appears in the estimated subtitles.
+
+## Debug capture sessions
+
+When the user starts Debug capture, DOMPin attaches Chrome's debugger protocol to that tab for the
+duration of the capture and writes a continuous technical trace under `debug/`:
+
+```
+debug/
+  README.md
+  session.json
+  events/
+    0001-view.json
+    0002-click.json
+  screenshots/
+    0001-view.png
+    0002-click.png
+  network/
+    0001-get-api-example-com-v1-status.json
+    0001-get-api-example-com-v1-status.response.txt
+  console/
+    0001.json
+```
+
+- `session.json` contains capture timing, counts, paths, and the last capture error if any.
+- `events/` contains automatic `view` and `click` events with page context, click target metadata,
+  elapsed time, and screenshot path.
+- `screenshots/` contains viewport PNGs taken shortly after each view or click event.
+- `network/` contains one JSON file per request plus request/response body sidecar files when
+  Chrome exposes them through the debugger protocol.
+- `console/` contains console calls, browser log entries, and uncaught exception details.
+
+Debug capture is separate from manual annotation ordinals: it does not create `NN.md` pin files and
+does not change the annotation count.
+
 ## Sanitization rules
 
 - Domain folder names lowercase the host. `Example.com` and `example.com` collide into the same folder.
@@ -199,4 +266,7 @@ When files are added from the comment popup:
 
 ## Versioning
 
-The schema version is currently `2`, recorded as `meta.schemaVersion` in each annotation JSON, and matches `Settings.schemaVersion` in the extension. Backward-incompatible changes to the file layout will bump this version and emit a per-session `SCHEMA.md` describing the changes.
+The annotation payload schema version is currently `2`, recorded as `meta.schemaVersion` in each
+annotation JSON. Extension settings have their own independent schema version. Backward-incompatible
+changes to annotation files will bump the annotation schema version and emit a per-session
+`SCHEMA.md` describing the changes.

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-06-21
+
+### Added
+
+- **Debug capture sessions.** A new side-panel control starts a continuous debugging capture for the active session. It records automatic view and click events, delayed viewport screenshots, Chrome debugger network metadata, request payload sidecars, response body sidecars when available, console calls, browser log entries, and uncaught exceptions under `debug/` in the session folder.
+- **Debug capture appears in session output.** Session README files now link to `debug/README.md` when a debug capture exists, without mixing automatic debug events into the manual annotation count.
+- **Onboarding now explains debugging capture.** The startup guide describes when to use the new technical investigation mode.
+
+### Changed
+
+- DOMPin now requests Chrome's `debugger` permission so the explicit Debug capture mode can collect full technical network and console evidence for the selected tab.
+- Documented recorded-session and debug-capture output folders in `docs/file-schema.md`.
+
 ## [0.4.8] — 2026-06-21
 
 ### Added

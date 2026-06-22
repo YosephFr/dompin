@@ -121,6 +121,57 @@ export interface NetworkEntry {
   error?: string;
 }
 
+export interface DebugClickTarget {
+  selector: string | null;
+  xpath: string | null;
+  tag: string;
+  id: string | null;
+  classes: string[];
+  role: string | null;
+  ariaLabel: string | null;
+  textPreview: string | null;
+  outerHTMLPreview: string;
+  boundingRect: RectInfo;
+}
+
+export interface DebugContentViewEvent {
+  type: 'view';
+  timestamp: number;
+  trigger: 'start' | 'url-change' | 'reload';
+  previousUrl?: string | null;
+  page: PageContext;
+}
+
+export interface DebugContentClickEvent {
+  type: 'click';
+  timestamp: number;
+  page: PageContext;
+  pointer: {
+    x: number;
+    y: number;
+    button: number;
+    buttons: number;
+    altKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    shiftKey: boolean;
+  };
+  target: DebugClickTarget | null;
+}
+
+export type DebugContentEvent = DebugContentViewEvent | DebugContentClickEvent;
+
+export interface DebugCaptureStatus {
+  active: boolean;
+  sessionId: string | null;
+  startedAt: number | null;
+  elapsedMs: number;
+  eventCount: number;
+  networkCount: number;
+  consoleCount: number;
+  lastError: string | null;
+}
+
 export type AnnotationId = string;
 
 export interface VaultStatus {
