@@ -45,7 +45,7 @@ DOMPin scopes annotations to named sessions, one per browser tab.
 
 1. With the side panel open, click **Start new session** in the Session card.
 2. Type a name (or leave it blank for an auto-generated slug) and press Enter.
-3. The picker arms automatically once the session is active.
+3. Start the picker, recording, or debug capture only when you need that tool.
 
 ## 5. Pin elements
 
@@ -68,12 +68,13 @@ The comment popup also includes:
 
 Open the options page from the side panel menu. Under **Audio transcription**, choose **ElevenLabs** or **OpenAI**, enter the matching API key, and keep or change the default model. DOMPin currently defaults to `scribe_v2` for ElevenLabs and `gpt-4o-transcribe` for OpenAI.
 
-## Optional: change the keyboard shortcut
+## Optional: change keyboard shortcuts
 
-To rebind the one-shot picker shortcut:
+To rebind the one-shot picker or recorded-session frame shortcut:
 
 1. Open `chrome://extensions/shortcuts`.
 2. Find **DOMPin → Toggle the DOMPin element picker** and assign your preferred chord.
+3. Find **DOMPin → Mark the current recorded-session frame** to change the recording frame mark shortcut. Keep it set to **Global** if you want it to work while another app is focused. Chrome global shortcuts require a non-modifier key; the default is `Ctrl+Shift+8`.
 
 ## Reconnecting after a browser restart
 

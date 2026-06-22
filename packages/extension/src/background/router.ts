@@ -41,9 +41,11 @@ import { snapshotNetworkFailures } from './network-failures.js';
 import { checkGitHelper, commitSessionSnapshot, type GitCommitResult } from './git-helper.js';
 import {
   addRecordingFrameMark,
+  pauseSessionRecording,
   annotationRecordingContext,
   clearSessionRecording,
   recordingFrameMarks,
+  resumeSessionRecording,
   startSessionRecording,
   stopSessionRecording,
 } from './recording-state.js';
@@ -336,6 +338,14 @@ async function handle(
     }
     case 'recording:session-start': {
       startSessionRecording(req.sessionId, req.startedAt);
+      return ok({});
+    }
+    case 'recording:session-pause': {
+      pauseSessionRecording(req.sessionId);
+      return ok({});
+    }
+    case 'recording:session-resume': {
+      resumeSessionRecording(req.sessionId);
       return ok({});
     }
     case 'recording:session-stop': {

@@ -9,7 +9,7 @@
  * the recorded audio back as a data URL.
  */
 
-type OffscreenCommand = 'start' | 'stop' | 'pause' | 'resume' | 'cancel';
+type OffscreenCommand = 'start' | 'stop' | 'pause' | 'resume' | 'cancel' | 'beep';
 
 interface OffscreenMessage {
   target: 'dompin-offscreen';
@@ -48,6 +48,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'cancel':
       finishRecording(true, sendResponse);
       return true;
+    case 'beep':
+      sendResponse(playBeep());
+      return false;
     default:
       return false;
   }
@@ -109,6 +112,31 @@ function resumeRecording(): { ok: true } | { ok: false; error: string } {
   }
   recorder.resume();
   return { ok: true };
+}
+
+function playBeep(): { ok: true } | { ok: false; error: string } {
+  try {
+    const AudioContextCtor = window.AudioContext;
+    const context = new AudioContextCtor();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.18);
+    oscillator.onended = () => {
+      void context.close().catch(() => undefined);
+    };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
 }
 
 function handleRecorderStop(): void {

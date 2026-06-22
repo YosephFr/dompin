@@ -3,15 +3,32 @@ import { createLogger } from '../common/logger.js';
 import { gatePickerBySession, openSidePanelFor } from './picker-gate.js';
 import { checkPageAccess } from './page-access.js';
 import { broadcastPickerError } from './picker-error.js';
+import { addGlobalRecordingFrameMark } from './recording-state.js';
+import { playRecordingBeep } from './audio-recorder.js';
 
 const log = createLogger('commands');
 
 export function setupCommands(): void {
   if (!chrome.commands?.onCommand) return;
   chrome.commands.onCommand.addListener((command) => {
-    if (command !== 'toggle-picker') return;
-    void oneShotPickerOnActiveTab();
+    if (command === 'toggle-picker') {
+      void oneShotPickerOnActiveTab();
+      return;
+    }
+    if (command === 'mark-recording-frame') {
+      void markRecordingFrameFromCommand();
+    }
   });
+}
+
+async function markRecordingFrameFromCommand(): Promise<void> {
+  try {
+    const mark = addGlobalRecordingFrameMark();
+    if (!mark) return;
+    await playRecordingBeep();
+  } catch (e) {
+    log.warn('recording frame command failed', e);
+  }
 }
 
 async function oneShotPickerOnActiveTab(): Promise<void> {

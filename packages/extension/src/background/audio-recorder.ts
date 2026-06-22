@@ -77,12 +77,17 @@ export async function cancelRecording(): Promise<void> {
   await sendToOffscreen('cancel');
 }
 
+export async function playRecordingBeep(): Promise<void> {
+  await ensureOffscreen();
+  await sendToOffscreen('beep');
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function sendToOffscreen<T>(
-  cmd: 'start' | 'stop' | 'pause' | 'resume' | 'cancel',
+  cmd: 'start' | 'stop' | 'pause' | 'resume' | 'cancel' | 'beep',
 ): Promise<T | undefined> {
   return chrome.runtime
     .sendMessage({ target: 'dompin-offscreen', cmd })

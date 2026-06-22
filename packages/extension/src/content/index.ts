@@ -313,6 +313,7 @@ class ContentApp {
     const mark: RecordingFrameMark = {
       id: randomId(),
       sessionId: this.recordingFrameSessionId,
+      source: 'page-click',
       timestamp,
       startedAt: this.recordingFrameStartedAt,
       elapsedMs: Math.max(0, timestamp - this.recordingFrameStartedAt),

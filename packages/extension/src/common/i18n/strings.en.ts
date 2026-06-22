@@ -48,7 +48,7 @@ export const en = {
     pause: 'Pause',
     resume: 'Resume',
     stop: 'Stop',
-    hint: 'Captures screen video and microphone. Mark frames with Cmd + Ctrl + click.',
+    hint: 'Captures screen video and microphone. Mark frames with the Chrome global shortcut, Ctrl+Shift+8 by default.',
     frameMarks: (n: number) => `${n} frame mark${n === 1 ? '' : 's'} saved with the shortcut.`,
     saved: 'Recording saved in this session.',
     pending: 'A saved recording still needs processing.',
@@ -152,7 +152,7 @@ export const en = {
       "You'll see a numbered marker on the element and the file appears immediately in your session folder.",
     step6Title: 'Record longer sessions when needed',
     step6Tip:
-      'Use Record session to capture screen and microphone. Mark video frames with Cmd + Ctrl + click. The video is saved first, and DOMPin shows Retry if processing fails.',
+      "Use Record session to capture screen and microphone. Mark video frames with Chrome's global shortcut, Ctrl+Shift+8 by default. The video is saved first, and DOMPin shows Retry if processing fails.",
     step7Title: 'Enable local Git only after setup',
     step7Tip:
       'Git checkpoints require a one-time local companion install. After that, each annotation and edit is versioned inside the session.',

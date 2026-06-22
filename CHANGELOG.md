@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] — 2026-06-21
+
+### Added
+
+- **Recorded-session frame marks now work outside Chrome.** Recording mode registers a global Chrome command that marks the current video timestamp without needing a page click; DOMPin later extracts the PNG frame from the saved video.
+- **Frame marks confirm with audio feedback.** A short beep plays when the global shortcut records a timestamp.
+
+### Changed
+
+- **Recording instructions now use Chrome's global shortcut model.** The default frame shortcut is `Ctrl+Shift+8`, which can be remapped in `chrome://extensions/shortcuts`; Chrome global commands still require a non-modifier key.
+
 ## [0.5.3] — 2026-06-21
 
 ### Changed

@@ -134,6 +134,7 @@ export function RecordingHero({
     if (stateRef.current !== 'recording') return;
     pauseRecorder(displayRecorderRef.current);
     pauseRecorder(micRecorderRef.current);
+    void sendRequest({ kind: 'recording:session-pause', sessionId: session.id });
     void stopFrameCaptureForTab();
     clearTimer(timerRef);
     setLevel(0);
@@ -144,6 +145,7 @@ export function RecordingHero({
     if (stateRef.current !== 'paused') return;
     resumeRecorder(displayRecorderRef.current);
     resumeRecorder(micRecorderRef.current);
+    void sendRequest({ kind: 'recording:session-resume', sessionId: session.id });
     void startFrameCaptureForTab(startedAtRef.current);
     setState('recording');
     startTimer(timerRef, startedAtRef.current, setElapsedMs);
@@ -249,7 +251,7 @@ export function RecordingHero({
           },
           frames: frameMarks.map((mark, index) => ({
             index: index + 1,
-            source: 'manual-shortcut',
+            source: mark.source,
             atMs: mark.elapsedMs,
             timestamp: mark.timestamp,
             page: mark.page,
@@ -374,7 +376,7 @@ export function RecordingHero({
           frames: frames.map((frame) => ({
             index: frame.index,
             atMs: frame.atMs,
-            source: 'manual-shortcut',
+            source: frame.mark.source,
             timestamp: frame.mark.timestamp,
             page: frame.mark.page,
             target: frame.mark.target,
@@ -768,18 +770,32 @@ function parsePendingRecording(text: string): PendingRecording {
 
 function sanitizeFrameMarks(value: unknown): RecordingFrameMark[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((mark): mark is RecordingFrameMark => {
-    if (!mark || typeof mark !== 'object') return false;
+  const marks: RecordingFrameMark[] = [];
+  for (const mark of value) {
+    if (!mark || typeof mark !== 'object') continue;
     const m = mark as Partial<RecordingFrameMark>;
-    return (
+    if (
       typeof m.id === 'string' &&
       typeof m.sessionId === 'string' &&
       Number.isFinite(Number(m.timestamp)) &&
       Number.isFinite(Number(m.startedAt)) &&
-      Number.isFinite(Number(m.elapsedMs)) &&
-      Boolean(m.page)
-    );
-  });
+      Number.isFinite(Number(m.elapsedMs))
+    ) {
+      const source = m.source === 'global-command' ? 'global-command' : 'page-click';
+      marks.push({
+        id: m.id,
+        sessionId: m.sessionId,
+        source,
+        timestamp: Number(m.timestamp),
+        startedAt: Number(m.startedAt),
+        elapsedMs: Number(m.elapsedMs),
+        page: m.page ?? null,
+        pointer: m.pointer ?? null,
+        target: m.target ?? null,
+      });
+    }
+  }
+  return marks;
 }
 
 function renderRecordingReadme(input: {
@@ -815,7 +831,12 @@ function renderRecordingReadme(input: {
       lines.push(
         `- ${formatSrtTime(frame.atMs)} (${Math.round(frame.atMs / 1000)}s) · [frame](./frames/${frame.image})`,
       );
-      lines.push(`  Page: ${frame.mark.page.title || '(untitled)'} · ${frame.mark.page.url}`);
+      lines.push(`  Source: ${sourceLabel(frame.mark)}`);
+      if (frame.mark.page) {
+        lines.push(`  Page: ${frame.mark.page.title || '(untitled)'} · ${frame.mark.page.url}`);
+      } else {
+        lines.push('  Page: outside browser context');
+      }
       lines.push(`  Target: ${targetLabel(frame.mark)}`);
     }
   }
@@ -903,7 +924,8 @@ function dedupeFrameMarks(marks: RecordingFrameMark[]): RecordingFrameMark[] {
     if (
       previous &&
       Math.abs(previous.elapsedMs - mark.elapsedMs) < 250 &&
-      previous.page.url === mark.page.url &&
+      previous.source === mark.source &&
+      previous.page?.url === mark.page?.url &&
       previous.target?.selector === mark.target?.selector
     ) {
       continue;
@@ -923,6 +945,10 @@ function targetLabel(mark: RecordingFrameMark): string {
     target.ariaLabel ? `aria=${target.ariaLabel}` : null,
   ].filter(Boolean);
   return bits.join(' · ') || target.tag;
+}
+
+function sourceLabel(mark: RecordingFrameMark): string {
+  return mark.source === 'global-command' ? 'global shortcut' : 'page click';
 }
 
 async function loadVideo(file: File): Promise<HTMLVideoElement> {

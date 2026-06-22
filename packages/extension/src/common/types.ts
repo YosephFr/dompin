@@ -164,14 +164,17 @@ export interface DebugContentClickEvent {
 
 export type DebugContentEvent = DebugContentViewEvent | DebugContentClickEvent;
 
+export type RecordingFrameMarkSource = 'page-click' | 'global-command';
+
 export interface RecordingFrameMark {
   id: string;
   sessionId: string;
+  source: RecordingFrameMarkSource;
   timestamp: number;
   startedAt: number;
   elapsedMs: number;
-  page: PageContext;
-  pointer: DebugContentClickEvent['pointer'];
+  page: PageContext | null;
+  pointer: DebugContentClickEvent['pointer'] | null;
   target: DebugClickTarget | null;
 }
 

@@ -220,10 +220,11 @@ recording/
 ```
 
 `recording.json` links the saved screen video, microphone narration, transcript, subtitles, and
-manual frame marks. During recording, `⌘ + Ctrl + click` stores a frame mark with the
-recording timestamp, page URL, pointer coordinates, and clicked target metadata. After transcription
-finishes, DOMPin extracts one PNG from the saved video for each mark and lists the exact timestamp in
-`recording/README.md`.
+manual frame marks. During recording, Chrome's global `Ctrl+Shift+8` shortcut stores a timestamp-only
+frame mark, so it works even when another app is focused. Page-click marks can still include page URL,
+pointer coordinates, and clicked target metadata when the mark happens inside the annotated page.
+After transcription finishes, DOMPin extracts one PNG from the saved video for each mark and lists the
+exact timestamp in `recording/README.md`.
 
 ## Debug capture sessions
 

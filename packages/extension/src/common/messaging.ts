@@ -57,6 +57,8 @@ export type RequestMessage =
   | { kind: 'audio:record-resume' }
   | { kind: 'audio:record-cancel' }
   | { kind: 'recording:session-start'; sessionId: string; startedAt: number }
+  | { kind: 'recording:session-pause'; sessionId: string }
+  | { kind: 'recording:session-resume'; sessionId: string }
   | { kind: 'recording:session-stop'; sessionId: string }
   | { kind: 'recording:frame-mark'; mark: RecordingFrameMark }
   | { kind: 'recording:frame-marks'; sessionId: string }
