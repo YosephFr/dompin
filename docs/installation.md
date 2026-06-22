@@ -74,7 +74,7 @@ To rebind the one-shot picker or recorded-session frame shortcut:
 
 1. Open `chrome://extensions/shortcuts`.
 2. Find **DOMPin → Toggle the DOMPin element picker** and assign your preferred chord.
-3. Find **DOMPin → Mark the current recorded-session frame** to change the recording frame mark shortcut. Keep it set to **Global** if you want it to work while another app is focused. Chrome global shortcuts require a non-modifier key; the default is `Ctrl+Shift+8`.
+3. Find **DOMPin → Mark the current recorded-session frame** to change the recording frame mark shortcut. Keep it set to **Global** if you want it to work while another app is focused. Chrome global shortcuts require a non-modifier key; the default is `Ctrl+Shift+1`.
 
 ## Reconnecting after a browser restart
 

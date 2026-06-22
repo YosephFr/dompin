@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] — 2026-06-22
+
+### Changed
+
+- **Recorded-session frame shortcut defaults to `Ctrl+Shift+1`.** The global command keeps the same behavior but uses the easier default chord requested for faster frame marking.
+
 ## [0.5.4] — 2026-06-21
 
 ### Added

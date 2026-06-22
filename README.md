@@ -16,7 +16,7 @@ DOMPin is a Chrome extension that lets you click any element or drag a custom re
 4. Use the microphone button to record audio and insert a provider transcript into the visible note, or use the attachment button to add screenshots and files to the pin before sending.
 5. Need a quick one-off without leaving your flow? Hit `⌘⇧.` (Mac) / `Ctrl⇧.` (Win/Linux) for a single-shot pick that auto-stops, or right-click any element and choose **Annotate element with DOMPin** to capture transient UI like dropdowns and popovers without dismissing them.
 6. For longer walkthroughs, use **Record session**. DOMPin saves the video first, transcribes the
-   narration, and lets you mark exact video frames with Chrome's global `Ctrl+Shift+8` shortcut by
+   narration, and lets you mark exact video frames with Chrome's global `Ctrl+Shift+1` shortcut by
    default, even when another app is focused.
 7. For technical investigations, use **Debug capture**. The default mode records external API calls,
    clicks, view changes, full-view screenshots for navigation, and padded element crops for clicks;
