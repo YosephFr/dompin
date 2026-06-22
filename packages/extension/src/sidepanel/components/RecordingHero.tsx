@@ -32,10 +32,12 @@ export function RecordingHero({
   session,
   tabId,
   onError,
+  onRecordingActiveChange,
 }: {
   session: Session;
   tabId: number | null;
   onError: (message: string) => void;
+  onRecordingActiveChange?: (active: boolean) => void;
 }): JSX.Element {
   const t = useT();
   const [state, setState] = useState<RecordingState>('idle');
@@ -64,6 +66,11 @@ export function RecordingHero({
   useEffect(() => {
     void refreshPendingRecording();
     return () => {
+      if (stateRef.current === 'recording' || stateRef.current === 'paused') {
+        void stop();
+        return;
+      }
+      if (stateRef.current === 'stopping' || stateRef.current === 'saving') return;
       releaseLocalResources();
       void stopFrameCaptureForTab();
       void sendRequest({ kind: 'recording:session-stop', sessionId: session.id });
@@ -118,6 +125,7 @@ export function RecordingHero({
       startMeter(micStream);
       await sendRequest({ kind: 'recording:session-start', sessionId: session.id, startedAt });
       await startFrameCaptureForTab(startedAt);
+      onRecordingActiveChange?.(true);
       setElapsedMs(0);
       setFrameMarkCount(0);
       setState('recording');
@@ -419,6 +427,7 @@ export function RecordingHero({
   function cleanupLocalRecording(): void {
     releaseLocalResources();
     void stopFrameCaptureForTab();
+    onRecordingActiveChange?.(false);
     setElapsedMs(0);
     setLevel(0);
     setFrameMarkCount(0);

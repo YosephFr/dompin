@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] — 2026-06-22
+
+### Fixed
+
+- **Recorded sessions no longer get discarded when the active Chrome tab changes.** Recording now stays locked to the session and tab that started it, so side-panel refreshes from tab changes do not unmount the recorder.
+- **Recording cleanup now flushes instead of dropping in-memory chunks.** If the recording panel is torn down while recording or paused, DOMPin attempts to stop and write the media instead of releasing tracks directly.
+
 ## [0.5.5] — 2026-06-22
 
 ### Changed

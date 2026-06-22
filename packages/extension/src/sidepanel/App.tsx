@@ -85,6 +85,10 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [newDraft, setNewDraft] = useState<string | null>(null);
   const [showOnboardingForced, setShowOnboardingForced] = useState(false);
+  const [recordingTarget, setRecordingTarget] = useState<{
+    session: Session;
+    tabId: number | null;
+  } | null>(null);
   const [sessionFlash, setSessionFlash] = useState(false);
   const originRef = useRef<OriginTab>(EMPTY_ORIGIN);
   const stateRef = useRef<ExtensionState | null>(null);
@@ -548,6 +552,10 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   const pickerState: PickerState = pickerOn ? 'on' : 'off';
   const sessionDraftOpen = newDraft !== null || renameDraft !== null;
   const showHero = Boolean(activeSession) && !sessionDraftOpen;
+  const recordingSession = recordingTarget?.session ?? activeSession;
+  const recordingTabId = recordingTarget?.tabId ?? origin.tabId;
+  const showRecordingHero =
+    Boolean(recordingSession) && (!sessionDraftOpen || Boolean(recordingTarget));
 
   return (
     <div className="shell">
@@ -619,11 +627,16 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
                 onToggleMarkers={() => void toggleMarkersVisibility()}
               />
             ) : null}
-            {showHero && activeSession ? (
+            {showRecordingHero && recordingSession ? (
               <RecordingHero
-                session={activeSession}
-                tabId={origin.tabId}
+                session={recordingSession}
+                tabId={recordingTabId}
                 onError={(message) => setError(message || null)}
+                onRecordingActiveChange={(active) => {
+                  setRecordingTarget(
+                    active ? { session: recordingSession, tabId: recordingTabId } : null,
+                  );
+                }}
               />
             ) : null}
             {showHero && activeSession ? (
