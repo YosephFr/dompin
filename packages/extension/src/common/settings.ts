@@ -8,8 +8,12 @@ export interface GitSettings {
   vaultPath: string;
 }
 
+export interface RecordingSettings {
+  frameKeywords: string[];
+}
+
 export interface Settings {
-  schemaVersion: 2;
+  schemaVersion: 3;
   allowlist: string[];
   flags: {
     captureNetworkFailures: boolean;
@@ -29,10 +33,11 @@ export interface Settings {
     languageCode: string;
   };
   git: GitSettings;
+  recording: RecordingSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   allowlist: ['*'],
   flags: {
     captureNetworkFailures: false,
@@ -52,21 +57,45 @@ export const DEFAULT_SETTINGS: Settings = {
     languageCode: '',
   },
   git: {
-    enabled: false,
+    enabled: true,
     helperName: 'com.yosephfr.dompin_git',
     vaultPath: '',
+  },
+  recording: {
+    frameKeywords: [
+      'aqui',
+      'aquí',
+      'mira',
+      'esto',
+      'captura',
+      'mira esto',
+      'justo esto',
+      'aca',
+      'acá',
+      'este punto',
+      'esta parte',
+      'fijate',
+      'observa',
+      'en este momento',
+    ],
   },
 };
 
 export function mergeSettings(partial: Partial<Settings> | undefined): Settings {
   const p = partial ?? {};
+  const incomingVersion = Number(p.schemaVersion ?? 0);
   const flags = { ...DEFAULT_SETTINGS.flags, ...(p.flags ?? {}) };
   const preferences = { ...DEFAULT_SETTINGS.preferences, ...(p.preferences ?? {}) };
   const transcription = { ...DEFAULT_SETTINGS.transcription, ...(p.transcription ?? {}) };
   const git = { ...DEFAULT_SETTINGS.git, ...(p.git ?? {}) };
+  if (incomingVersion < 3 && p.git?.enabled === false) git.enabled = true;
+  const recording = { ...DEFAULT_SETTINGS.recording, ...(p.recording ?? {}) };
+  if (!Array.isArray(recording.frameKeywords) || recording.frameKeywords.length === 0) {
+    recording.frameKeywords = DEFAULT_SETTINGS.recording.frameKeywords;
+  }
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 2, allowlist, flags, preferences, transcription, git };
+  return { schemaVersion: 3, allowlist, flags, preferences, transcription, git, recording };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {

@@ -64,10 +64,11 @@ function commitSession(message) {
 }
 
 function resolveSessionPath(message) {
-  const vaultPath = requiredString(message.vaultPath, 'vaultPath');
+  const vaultPath = typeof message.vaultPath === 'string' ? message.vaultPath.trim() : '';
+  const vaultName = typeof message.vaultName === 'string' ? message.vaultName.trim() : '';
   const domainFolder = requiredString(message.domainFolder, 'domainFolder');
   const sessionFolder = requiredString(message.sessionFolder, 'sessionFolder');
-  const root = path.resolve(expandHome(vaultPath));
+  const root = resolveVaultRoot(vaultPath, vaultName);
   const sessionPath = path.resolve(root, domainFolder, sessionFolder);
   const rel = path.relative(root, sessionPath);
   if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
@@ -76,6 +77,24 @@ function resolveSessionPath(message) {
   const stat = fs.statSync(sessionPath, { throwIfNoEntry: false });
   if (!stat?.isDirectory()) throw new Error('Session folder does not exist.');
   return sessionPath;
+}
+
+function resolveVaultRoot(vaultPath, vaultName) {
+  if (vaultPath) return path.resolve(expandHome(vaultPath));
+  if (!vaultName) throw new Error('vaultPath or vaultName is required.');
+  const candidates = [
+    path.join(os.homedir(), vaultName),
+    path.join(os.homedir(), 'Desktop', vaultName),
+    path.join(os.homedir(), 'Documents', vaultName),
+    path.join(os.homedir(), 'Downloads', vaultName),
+  ];
+  for (const candidate of candidates) {
+    const stat = fs.statSync(candidate, { throwIfNoEntry: false });
+    if (stat?.isDirectory()) return path.resolve(candidate);
+  }
+  throw new Error(
+    `Could not find vault folder "${vaultName}". Set the absolute vault path in DOMPin Options.`,
+  );
 }
 
 function ensureGitRepository(sessionPath) {

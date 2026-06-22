@@ -14,12 +14,31 @@ type PendingRecording = {
   audioName: string;
   audioMimeType: string;
 };
+type TranscriptCue = {
+  index: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+  keywords: string[];
+};
+type ExtractedFrame = {
+  index: number;
+  atMs: number;
+  cueStartMs: number;
+  cueEndMs: number;
+  keywords: string[];
+  text: string;
+  image: string;
+  clip: string | null;
+};
 
 export function RecordingHero({
   session,
+  frameKeywords,
   onError,
 }: {
   session: Session;
+  frameKeywords: string[];
   onError: (message: string) => void;
 }): JSX.Element {
   const t = useT();
@@ -293,7 +312,9 @@ export function RecordingHero({
       model: string;
     },
   ): Promise<void> {
-    const srt = renderEstimatedSrt(input.transcript, input.durationMs);
+    const cues = buildTranscriptCues(input.transcript, input.durationMs, frameKeywords);
+    const srt = renderEstimatedSrt(cues);
+    const frames = await extractKeywordFrames(dir, input.videoName, cues);
     await writeTextFile(dir, 'transcript.txt', input.transcript);
     await writeTextFile(dir, 'transcript.srt', srt);
     await writeTextFile(
@@ -318,6 +339,14 @@ export function RecordingHero({
             model: input.model || null,
             timing: 'estimated-from-recording-duration',
           },
+          frames: frames.map((frame) => ({
+            index: frame.index,
+            atMs: frame.atMs,
+            keywords: frame.keywords,
+            text: frame.text,
+            image: `./frames/${frame.image}`,
+            clip: frame.clip ? `./frames/${frame.clip}` : null,
+          })),
         },
         null,
         2,
@@ -336,6 +365,7 @@ export function RecordingHero({
         transcript: input.transcript,
         provider: input.provider,
         model: input.model,
+        frames,
       }),
     );
   }
@@ -676,6 +706,7 @@ function renderRecordingReadme(input: {
   transcript: string;
   provider: string;
   model: string;
+  frames: ExtractedFrame[];
 }): string {
   const lines: string[] = [];
   lines.push(`# Recorded session - ${input.session.name}`);
@@ -689,6 +720,21 @@ function renderRecordingReadme(input: {
   lines.push('- Subtitles: [transcript.srt](./transcript.srt)');
   if (input.provider && input.model)
     lines.push(`- Transcription: ${input.provider} / ${input.model}`);
+  if (input.frames.length) {
+    lines.push(`- Keyword frames: ${input.frames.length}`);
+  }
+  if (input.frames.length) {
+    lines.push('');
+    lines.push('## Keyword frames');
+    lines.push('');
+    for (const frame of input.frames) {
+      const clip = frame.clip ? ` · [clip](./frames/${frame.clip})` : '';
+      lines.push(
+        `- ${formatSrtTime(frame.atMs)} · ${frame.keywords.join(', ')} · [frame](./frames/${frame.image})${clip}`,
+      );
+      lines.push(`  ${frame.text}`);
+    }
+  }
   lines.push('');
   lines.push('## Transcript');
   lines.push('');
@@ -697,18 +743,304 @@ function renderRecordingReadme(input: {
   return lines.join('\n');
 }
 
-function renderEstimatedSrt(transcript: string, durationMs: number): string {
+function buildTranscriptCues(
+  transcript: string,
+  durationMs: number,
+  frameKeywords: string[],
+): TranscriptCue[] {
   const text = transcript.replace(/\s+/g, ' ').trim();
-  if (!text) return '';
+  if (!text) return [];
   const parts = splitTranscript(text);
   const duration = Math.max(durationMs, parts.length * 1200);
-  return parts
-    .map((part, idx) => {
-      const start = Math.round((duration / parts.length) * idx);
-      const end = Math.round((duration / parts.length) * (idx + 1));
-      return `${idx + 1}\n${formatSrtTime(start)} --> ${formatSrtTime(end)}\n${part}\n`;
+  return parts.map((part, idx) => {
+    const start = Math.round((duration / parts.length) * idx);
+    const end = Math.round((duration / parts.length) * (idx + 1));
+    return {
+      index: idx + 1,
+      startMs: start,
+      endMs: Math.max(start + 800, end),
+      text: part,
+      keywords: matchKeywords(part, frameKeywords),
+    };
+  });
+}
+
+function renderEstimatedSrt(cues: TranscriptCue[]): string {
+  return cues
+    .map((cue) => {
+      return `${cue.index}\n${formatSrtTime(cue.startMs)} --> ${formatSrtTime(cue.endMs)}\n${cue.text}\n`;
     })
     .join('\n');
+}
+
+async function extractKeywordFrames(
+  dir: FileSystemDirectoryHandle,
+  videoName: string,
+  cues: TranscriptCue[],
+): Promise<ExtractedFrame[]> {
+  const matches = dedupeFrameCues(cues.filter((cue) => cue.keywords.length > 0)).slice(0, 24);
+  const framesDir = await dir.getDirectoryHandle('frames', { create: true });
+  await clearDirectory(framesDir);
+  if (!matches.length) {
+    await writeTextFile(framesDir, 'frames.json', '[]');
+    return [];
+  }
+
+  const videoHandle = await dir.getFileHandle(videoName);
+  const videoFile = await videoHandle.getFile();
+  const video = await loadVideo(videoFile);
+  const frames: ExtractedFrame[] = [];
+
+  try {
+    for (const [index, cue] of matches.entries()) {
+      const atMs = clampMs(Math.round((cue.startMs + cue.endMs) / 2), videoDurationMs(video));
+      const image = `frame-${String(index + 1).padStart(2, '0')}-${String(
+        Math.round(atMs / 1000),
+      ).padStart(4, '0')}s.png`;
+      await seekVideo(video, atMs);
+      await writeBlobFile(framesDir, image, await captureVideoFrame(video));
+      let clip: string | null = null;
+      if (index < 8) {
+        const clipBlob = await captureVideoClip(video, atMs);
+        if (clipBlob) {
+          clip = image.replace(/\.png$/, '.webm');
+          await writeBlobFile(framesDir, clip, clipBlob);
+        }
+      }
+      frames.push({
+        index: index + 1,
+        atMs,
+        cueStartMs: cue.startMs,
+        cueEndMs: cue.endMs,
+        keywords: cue.keywords,
+        text: cue.text,
+        image,
+        clip,
+      });
+    }
+  } finally {
+    video.pause();
+    URL.revokeObjectURL(video.src);
+    video.removeAttribute('src');
+    video.load();
+  }
+
+  await writeTextFile(framesDir, 'frames.json', JSON.stringify(frames, null, 2));
+  return frames;
+}
+
+function dedupeFrameCues(cues: TranscriptCue[]): TranscriptCue[] {
+  const out: TranscriptCue[] = [];
+  for (const cue of cues) {
+    const atMs = Math.round((cue.startMs + cue.endMs) / 2);
+    const previous = out[out.length - 1];
+    if (previous && atMs - Math.round((previous.startMs + previous.endMs) / 2) < 1500) {
+      previous.keywords = Array.from(new Set([...previous.keywords, ...cue.keywords]));
+      previous.text = `${previous.text} ${cue.text}`.trim();
+      previous.endMs = Math.max(previous.endMs, cue.endMs);
+    } else {
+      out.push({ ...cue, keywords: [...cue.keywords] });
+    }
+  }
+  return out;
+}
+
+function matchKeywords(text: string, frameKeywords: string[]): string[] {
+  const haystack = normalizeText(text);
+  const matches: string[] = [];
+  for (const keyword of normalizeKeywords(frameKeywords)) {
+    if (haystack.includes(keyword.normalized)) matches.push(keyword.label);
+  }
+  return matches;
+}
+
+function normalizeKeywords(frameKeywords: string[]): Array<{ label: string; normalized: string }> {
+  const out: Array<{ label: string; normalized: string }> = [];
+  const seen = new Set<string>();
+  for (const raw of frameKeywords) {
+    const label = raw.replace(/\s+/g, ' ').trim();
+    const normalized = normalizeText(label);
+    if (!label || !normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push({ label, normalized });
+  }
+  return out;
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function loadVideo(file: File): Promise<HTMLVideoElement> {
+  const video = document.createElement('video');
+  video.preload = 'auto';
+  video.muted = true;
+  video.playsInline = true;
+  video.src = URL.createObjectURL(file);
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Could not load recorded video.'));
+    }, 8000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener('loadedmetadata', onLoad);
+      video.removeEventListener('error', onError);
+    };
+    const onLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error('Recorded video could not be decoded.'));
+    };
+    video.addEventListener('loadedmetadata', onLoad);
+    video.addEventListener('error', onError);
+  });
+  return video;
+}
+
+async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
+  const { canvas, context } = createVideoCanvas(video);
+  drawVideoFrame(video, context, canvas);
+  return canvasToBlob(canvas, 'image/png');
+}
+
+async function captureVideoClip(video: HTMLVideoElement, centerMs: number): Promise<Blob | null> {
+  if (typeof MediaRecorder === 'undefined') return null;
+  if (typeof HTMLCanvasElement === 'undefined' || !HTMLCanvasElement.prototype.captureStream) {
+    return null;
+  }
+
+  const { canvas, context } = createVideoCanvas(video);
+  const stream = canvas.captureStream(12);
+  const chunks: Blob[] = [];
+  const mimeType = preferredClipMimeType();
+  let recorder: MediaRecorder;
+  try {
+    recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  } catch {
+    stopTracks(stream);
+    return null;
+  }
+  const done = new Promise<Blob>((resolve) => {
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' }));
+    };
+  });
+  const duration = videoDurationMs(video);
+  const start = clampMs(centerMs - 1500, duration);
+  const end = clampMs(centerMs + 1500, duration);
+
+  await seekVideo(video, start);
+  drawVideoFrame(video, context, canvas);
+  recorder.start();
+  for (let atMs = start; atMs <= end; atMs += 125) {
+    await seekVideo(video, atMs);
+    drawVideoFrame(video, context, canvas);
+    await delay(70);
+  }
+  recorder.stop();
+  const blob = await done;
+  stopTracks(stream);
+  return blob.size > 0 ? blob : null;
+}
+
+function createVideoCanvas(video: HTMLVideoElement): {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+} {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, video.videoWidth || 1280);
+  canvas.height = Math.max(1, video.videoHeight || 720);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not prepare frame canvas.');
+  return { canvas, context };
+}
+
+function drawVideoFrame(
+  video: HTMLVideoElement,
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+): void {
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Could not encode frame.'));
+    }, type);
+  });
+}
+
+function seekVideo(video: HTMLVideoElement, atMs: number): Promise<void> {
+  const duration = videoDurationMs(video);
+  const target = clampMs(atMs, duration) / 1000;
+  if (Math.abs(video.currentTime - target) < 0.02) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Could not seek recorded video.'));
+    }, 5000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+    };
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error('Recorded video seek failed.'));
+    };
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('error', onError);
+    video.currentTime = target;
+  });
+}
+
+function videoDurationMs(video: HTMLVideoElement): number {
+  const duration = Number.isFinite(video.duration) ? Math.round(video.duration * 1000) : 0;
+  return Math.max(1000, duration);
+}
+
+function clampMs(value: number, durationMs: number): number {
+  return Math.min(Math.max(0, Math.round(value)), Math.max(0, durationMs - 50));
+}
+
+async function clearDirectory(dir: FileSystemDirectoryHandle): Promise<void> {
+  const iterable = dir as FileSystemDirectoryHandle & {
+    entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
+  };
+  for await (const [name] of iterable.entries()) {
+    await dir.removeEntry(name, { recursive: true });
+  }
+}
+
+function preferredClipMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  for (const type of ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return '';
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function splitTranscript(text: string): string[] {

@@ -19,10 +19,11 @@ export function commitSessionSnapshot(
   session: Session,
   settings: Settings,
   message: string,
+  vaultName?: string | null,
 ): Promise<GitCommitResult> {
   const next = gitQueue.then(
-    () => commitNow(session, settings, message),
-    () => commitNow(session, settings, message),
+    () => commitNow(session, settings, message, vaultName),
+    () => commitNow(session, settings, message, vaultName),
   );
   gitQueue = next.catch(() => undefined);
   return next;
@@ -45,15 +46,17 @@ async function commitNow(
   session: Session,
   settings: Settings,
   message: string,
+  vaultName?: string | null,
 ): Promise<GitCommitResult> {
   if (!settings.git.enabled) return { ok: true, status: 'disabled' };
   const helperName = settings.git.helperName.trim();
   const vaultPath = settings.git.vaultPath.trim();
-  if (!helperName || !vaultPath) return { ok: true, status: 'skipped' };
+  if (!helperName) return { ok: true, status: 'skipped' };
 
   const resp = await sendNative(helperName, {
     kind: 'commit-session',
     vaultPath,
+    vaultName: vaultName ?? '',
     domainFolder: session.domainFolder,
     sessionFolder: session.folder,
     sessionName: session.name,

@@ -37,6 +37,7 @@ export function App(): JSX.Element {
   const [savedFolderName, setSavedFolderName] = useState<string | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [allowlistText, setAllowlistText] = useState('');
+  const [frameKeywordsText, setFrameKeywordsText] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [gitCheck, setGitCheck] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export function App(): JSX.Element {
     setState(resp.state);
     setDraft(resp.state.settings);
     setAllowlistText(resp.state.settings.allowlist.join('\n'));
+    setFrameKeywordsText(resp.state.settings.recording.frameKeywords.join('\n'));
     if (resp.state.vault.configured) {
       setStep('settings');
       setSavedFolderName(resp.state.vault.rootName);
@@ -68,11 +70,17 @@ export function App(): JSX.Element {
   const dirty = useMemo(() => {
     if (!state || !draft) return false;
     if (!sameAllowlist(parseAllowlist(allowlistText), draft.allowlist)) return true;
+    if (!sameStringArray(parseFrameKeywords(frameKeywordsText), draft.recording.frameKeywords))
+      return true;
     return !sameSettings(state.settings, {
       ...draft,
       allowlist: parseAllowlist(allowlistText),
+      recording: {
+        ...draft.recording,
+        frameKeywords: parseFrameKeywords(frameKeywordsText),
+      },
     });
-  }, [state, draft, allowlistText]);
+  }, [state, draft, allowlistText, frameKeywordsText]);
 
   async function pickFolder(): Promise<void> {
     setPickError(null);
@@ -191,6 +199,10 @@ export function App(): JSX.Element {
       const next = mergeSettings({
         ...draft,
         allowlist: parseAllowlist(allowlistText),
+        recording: {
+          ...draft.recording,
+          frameKeywords: parseFrameKeywords(frameKeywordsText),
+        },
       });
       const resp = await sendRequest({ kind: 'settings:save', settings: next });
       if (!resp.ok) {
@@ -200,6 +212,7 @@ export function App(): JSX.Element {
       setState((prev) => (prev ? { ...prev, settings: next } : prev));
       setDraft(next);
       setAllowlistText(next.allowlist.join('\n'));
+      setFrameKeywordsText(next.recording.frameKeywords.join('\n'));
     } finally {
       setSavingSettings(false);
     }
@@ -213,6 +226,10 @@ export function App(): JSX.Element {
       const next = mergeSettings({
         ...draft,
         allowlist: parseAllowlist(allowlistText),
+        recording: {
+          ...draft.recording,
+          frameKeywords: parseFrameKeywords(frameKeywordsText),
+        },
       });
       await sendRequest({ kind: 'settings:save', settings: next });
       const resp = await sendRequest<{ available: boolean; message: string }>({
@@ -378,15 +395,15 @@ export function App(): JSX.Element {
           <h2>Local Git history</h2>
         </div>
         <p className="section-hint">
-          DOMPin can create a Git checkpoint inside each session folder after every annotation
-          change. Chrome requires a small local companion app for this because extensions cannot run
-          Git directly.
+          DOMPin creates a Git checkpoint inside each session folder after session starts, resumes,
+          annotations, edits, deletes, and recorded-session processing.
         </p>
         <label className="toggle">
           <span className="toggle-text">
             <span className="toggle-label">Enable automatic Git checkpoints</span>
             <span className="toggle-description">
-              Leave this off unless the local Git companion has been installed on this computer.
+              Recommended. If the local companion is not connected, DOMPin still saves the files and
+              the status check below explains what failed.
             </span>
           </span>
           <input
@@ -400,11 +417,9 @@ export function App(): JSX.Element {
           </span>
         </label>
         <ul className="requirement-list">
-          <li>
-            Install once with <code>native/install-macos.sh {chrome.runtime.id}</code>.
-          </li>
-          <li>Use the absolute path of the same folder selected as the vault.</li>
-          <li>Git must be installed on the computer.</li>
+          <li>Use “Check companion” after installing or reloading the extension.</li>
+          <li>The vault path is optional when the selected folder is in your home folders.</li>
+          <li>If a custom vault path is needed, add it in Advanced Git setup.</li>
         </ul>
         <div className="row">
           <button
@@ -431,7 +446,7 @@ export function App(): JSX.Element {
               />
             </label>
             <label className="field">
-              <span className="field-label">Vault absolute path</span>
+              <span className="field-label">Optional vault absolute path</span>
               <input
                 className="input"
                 type="text"
@@ -481,6 +496,22 @@ export function App(): JSX.Element {
             </span>
           </label>
         ))}
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Recorded session frames</h2>
+        </div>
+        <p className="section-hint">
+          One keyword or phrase per line. When a recorded session transcript contains one of these,
+          DOMPin saves a still frame and a short WebM clip from that moment.
+        </p>
+        <textarea
+          className="textarea"
+          value={frameKeywordsText}
+          spellCheck={false}
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFrameKeywordsText(e.target.value)}
+        />
       </section>
 
       <section className="section">
@@ -597,7 +628,24 @@ function parseAllowlist(text: string): string[] {
   return lines.length > 0 ? lines : ['*'];
 }
 
+function parseFrameKeywords(text: string): string[] {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const line of text.split('\n')) {
+    const value = line.replace(/\s+/g, ' ').trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    lines.push(value);
+  }
+  return lines.length ? lines : mergeSettings(undefined).recording.frameKeywords;
+}
+
 function sameAllowlist(a: string[], b: string[]): boolean {
+  return sameStringArray(a, b);
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) {
     if (a[i] !== b[i]) return false;
@@ -616,5 +664,6 @@ function sameSettings(a: Settings, b: Settings): boolean {
   for (const k of Object.keys(a.git) as Array<keyof Settings['git']>) {
     if (a.git[k] !== b.git[k]) return false;
   }
+  if (!sameStringArray(a.recording.frameKeywords, b.recording.frameKeywords)) return false;
   return true;
 }

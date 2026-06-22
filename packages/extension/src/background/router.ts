@@ -115,14 +115,23 @@ async function handle(
           log.debug('rename readme regen skipped', e),
         );
       }
+      await commitActiveSession(session, `Rename session: ${session.name}`);
       return ok({ session });
     }
     case 'session:new': {
       const session = await newSession(req.tabId, req.pageUrl, null, req.name);
+      await regenerateSessionReadme(session).catch((e) =>
+        log.debug('new session readme regen skipped', e),
+      );
+      await commitActiveSession(session, `Start session: ${session.name}`);
       return ok({ session });
     }
     case 'session:resume': {
       const session = await resumeSession(req.tabId, req.sessionId, req.pageUrl, req.pageTitle);
+      await regenerateSessionReadme(session).catch((e) =>
+        log.debug('resume readme regen skipped', e),
+      );
+      await commitActiveSession(session, `Resume session: ${session.name}`);
       return ok({ session });
     }
     case 'session:archive': {
@@ -156,12 +165,14 @@ async function handle(
         };
         const result = await writeAnnotation(session, payload);
         await bumpSessionAnnotation(session.id, +1, pageUrl, pageTitle);
+        const vault = await getStatus();
         await commitSessionSnapshot(
           session,
           settings,
           `Add annotation ${String(result.ordinal).padStart(2, '0')}: ${commitPreview(
             payload.comment,
           )}`,
+          vault.rootName,
         );
         await broadcastToTabs({ kind: 'pins:update' });
         return ok({
@@ -416,8 +427,8 @@ async function findSessionForCancel(
 }
 
 async function commitActiveSession(session: Session, message: string): Promise<void> {
-  const settings = await loadSettings();
-  await commitSessionSnapshot(session, settings, message).catch((e) =>
+  const [settings, vault] = await Promise.all([loadSettings(), getStatus()]);
+  await commitSessionSnapshot(session, settings, message, vault.rootName).catch((e) =>
     log.debug('git commit skipped', e),
   );
 }
