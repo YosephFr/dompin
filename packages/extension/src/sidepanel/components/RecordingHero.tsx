@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react';
 import { useT } from '../../common/i18n/index.js';
 import { sendRequest } from '../../common/messaging.js';
-import type { Session } from '../../common/types.js';
+import type { RecordingFrameMark, Session } from '../../common/types.js';
 import { loadRootHandle, requestRootPermission } from '../../common/vault-handle.js';
 
 type RecordingState = 'idle' | 'recording' | 'paused' | 'stopping' | 'saving';
@@ -13,32 +13,28 @@ type PendingRecording = {
   videoName: string;
   audioName: string;
   audioMimeType: string;
+  frameMarks: RecordingFrameMark[];
 };
 type TranscriptCue = {
   index: number;
   startMs: number;
   endMs: number;
   text: string;
-  keywords: string[];
 };
 type ExtractedFrame = {
   index: number;
   atMs: number;
-  cueStartMs: number;
-  cueEndMs: number;
-  keywords: string[];
-  text: string;
   image: string;
-  clip: string | null;
+  mark: RecordingFrameMark;
 };
 
 export function RecordingHero({
   session,
-  frameKeywords,
+  tabId,
   onError,
 }: {
   session: Session;
-  frameKeywords: string[];
+  tabId: number | null;
   onError: (message: string) => void;
 }): JSX.Element {
   const t = useT();
@@ -48,6 +44,7 @@ export function RecordingHero({
   const [audioIssue, setAudioIssue] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingRecording | null>(null);
   const [level, setLevel] = useState(0);
+  const [frameMarkCount, setFrameMarkCount] = useState(0);
   const displayStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const displayRecorderRef = useRef<MediaRecorder | null>(null);
@@ -68,10 +65,18 @@ export function RecordingHero({
     void refreshPendingRecording();
     return () => {
       releaseLocalResources();
+      void stopFrameCaptureForTab();
       void sendRequest({ kind: 'recording:session-stop', sessionId: session.id });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
+
+  useEffect(() => {
+    if (state !== 'recording') return undefined;
+    const timer = window.setInterval(() => void refreshFrameMarkCount(), 1000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, session.id]);
 
   async function start(): Promise<void> {
     if (stateRef.current !== 'idle') return;
@@ -112,7 +117,9 @@ export function RecordingHero({
       audio.recorder.start(1000);
       startMeter(micStream);
       await sendRequest({ kind: 'recording:session-start', sessionId: session.id, startedAt });
+      await startFrameCaptureForTab(startedAt);
       setElapsedMs(0);
+      setFrameMarkCount(0);
       setState('recording');
       startTimer(timerRef, startedAt, setElapsedMs);
     } catch (e) {
@@ -127,6 +134,7 @@ export function RecordingHero({
     if (stateRef.current !== 'recording') return;
     pauseRecorder(displayRecorderRef.current);
     pauseRecorder(micRecorderRef.current);
+    void stopFrameCaptureForTab();
     clearTimer(timerRef);
     setLevel(0);
     setState('paused');
@@ -136,6 +144,7 @@ export function RecordingHero({
     if (stateRef.current !== 'paused') return;
     resumeRecorder(displayRecorderRef.current);
     resumeRecorder(micRecorderRef.current);
+    void startFrameCaptureForTab(startedAtRef.current);
     setState('recording');
     startTimer(timerRef, startedAtRef.current, setElapsedMs);
   }
@@ -152,6 +161,7 @@ export function RecordingHero({
     setState('stopping');
     const stoppedAt = Date.now();
     const durationMs = Math.max(0, stoppedAt - startedAtRef.current);
+    await stopFrameCaptureForTab();
     await sendRequest({ kind: 'recording:session-stop', sessionId: session.id });
     stopRecorder(displayRecorder);
     stopRecorder(micRecorder);
@@ -159,8 +169,11 @@ export function RecordingHero({
     stopTracks(micStreamRef.current);
     stopMeter();
 
-    const videoBlob = await videoDoneRef.current;
-    const audioBlob = await audioDoneRef.current;
+    const [videoBlob, audioBlob, frameMarks] = await Promise.all([
+      videoDoneRef.current,
+      audioDoneRef.current,
+      loadRecordingFrameMarks(),
+    ]);
     if (!videoBlob || !audioBlob) {
       cleanupLocalRecording();
       onError('Recording media was not captured.');
@@ -171,7 +184,14 @@ export function RecordingHero({
     let recordingDir: FileSystemDirectoryHandle;
     let nextPending: PendingRecording;
     try {
-      const media = await writeRecordingMedia(session, videoBlob, audioBlob, stoppedAt, durationMs);
+      const media = await writeRecordingMedia(
+        session,
+        videoBlob,
+        audioBlob,
+        stoppedAt,
+        durationMs,
+        frameMarks,
+      );
       recordingDir = media.dir;
       nextPending = media.pending;
       setPending(nextPending);
@@ -196,6 +216,7 @@ export function RecordingHero({
     audioBlob: Blob,
     stoppedAt: number,
     durationMs: number,
+    frameMarks: RecordingFrameMark[],
   ): Promise<{ dir: FileSystemDirectoryHandle; pending: PendingRecording }> {
     const dir = await getRecordingDir(currentSession);
     const videoName = `session.${extensionForMime(videoBlob.type, 'webm')}`;
@@ -226,6 +247,14 @@ export function RecordingHero({
             model: null,
             timing: 'estimated-from-recording-duration',
           },
+          frames: frameMarks.map((mark, index) => ({
+            index: index + 1,
+            source: 'manual-shortcut',
+            atMs: mark.elapsedMs,
+            timestamp: mark.timestamp,
+            page: mark.page,
+            target: mark.target,
+          })),
         },
         null,
         2,
@@ -238,6 +267,7 @@ export function RecordingHero({
       videoName,
       audioName,
       audioMimeType: audioBlob.type || 'audio/webm',
+      frameMarks,
     };
     await writeTextFile(dir, 'pending.json', JSON.stringify(pendingRecording, null, 2));
     return { dir, pending: pendingRecording };
@@ -277,6 +307,7 @@ export function RecordingHero({
       transcript: transcript.text,
       provider: transcript.provider,
       model: transcript.model,
+      frameMarks: item.frameMarks,
     });
     const finalize = await sendRequest({ kind: 'recording:finalize', sessionId: session.id });
     if (!finalize.ok) throw new Error(finalize.error);
@@ -310,11 +341,12 @@ export function RecordingHero({
       transcript: string;
       provider: string;
       model: string;
+      frameMarks: RecordingFrameMark[];
     },
   ): Promise<void> {
-    const cues = buildTranscriptCues(input.transcript, input.durationMs, frameKeywords);
+    const cues = buildTranscriptCues(input.transcript, input.durationMs);
     const srt = renderEstimatedSrt(cues);
-    const frames = await extractKeywordFrames(dir, input.videoName, cues);
+    const frames = await extractMarkedFrames(dir, input.videoName, input.frameMarks);
     await writeTextFile(dir, 'transcript.txt', input.transcript);
     await writeTextFile(dir, 'transcript.srt', srt);
     await writeTextFile(
@@ -342,10 +374,11 @@ export function RecordingHero({
           frames: frames.map((frame) => ({
             index: frame.index,
             atMs: frame.atMs,
-            keywords: frame.keywords,
-            text: frame.text,
+            source: 'manual-shortcut',
+            timestamp: frame.mark.timestamp,
+            page: frame.mark.page,
+            target: frame.mark.target,
             image: `./frames/${frame.image}`,
-            clip: frame.clip ? `./frames/${frame.clip}` : null,
           })),
         },
         null,
@@ -383,8 +416,10 @@ export function RecordingHero({
 
   function cleanupLocalRecording(): void {
     releaseLocalResources();
+    void stopFrameCaptureForTab();
     setElapsedMs(0);
     setLevel(0);
+    setFrameMarkCount(0);
     setState('idle');
   }
 
@@ -432,6 +467,36 @@ export function RecordingHero({
     meterFrameRef.current = null;
     void audioContextRef.current?.close().catch(() => undefined);
     audioContextRef.current = null;
+  }
+
+  async function startFrameCaptureForTab(startedAt: number): Promise<void> {
+    if (tabId == null) return;
+    try {
+      await chrome.tabs.sendMessage(tabId, {
+        kind: 'recording:frame-capture-start',
+        startedAt,
+        sessionId: session.id,
+      });
+    } catch {}
+  }
+
+  async function stopFrameCaptureForTab(): Promise<void> {
+    if (tabId == null) return;
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: 'recording:frame-capture-stop' });
+    } catch {}
+  }
+
+  async function loadRecordingFrameMarks(): Promise<RecordingFrameMark[]> {
+    const resp = await sendRequest<{ marks: RecordingFrameMark[] }>({
+      kind: 'recording:frame-marks',
+      sessionId: session.id,
+    });
+    return resp.ok && Array.isArray(resp.marks) ? resp.marks : [];
+  }
+
+  async function refreshFrameMarkCount(): Promise<void> {
+    setFrameMarkCount((await loadRecordingFrameMarks()).length);
   }
 
   const isBusy = state === 'stopping' || state === 'saving';
@@ -504,7 +569,11 @@ export function RecordingHero({
         </div>
       ) : null}
       <p className="hero-hint">
-        {audioIssue ? t.recording.audioIssue(audioIssue) : t.recording.hint}
+        {audioIssue
+          ? t.recording.audioIssue(audioIssue)
+          : frameMarkCount > 0
+            ? t.recording.frameMarks(frameMarkCount)
+            : t.recording.hint}
       </p>
       {lastSaved ? <p className="recording-saved">{lastSaved}</p> : null}
     </section>
@@ -683,6 +752,7 @@ function parsePendingRecording(text: string): PendingRecording {
     videoName: String(raw.videoName ?? ''),
     audioName: String(raw.audioName ?? ''),
     audioMimeType: String(raw.audioMimeType ?? 'audio/webm'),
+    frameMarks: sanitizeFrameMarks(raw.frameMarks),
   };
   if (
     !Number.isFinite(pending.startedAt) ||
@@ -694,6 +764,22 @@ function parsePendingRecording(text: string): PendingRecording {
     throw new Error('Pending recording is invalid.');
   }
   return pending;
+}
+
+function sanitizeFrameMarks(value: unknown): RecordingFrameMark[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((mark): mark is RecordingFrameMark => {
+    if (!mark || typeof mark !== 'object') return false;
+    const m = mark as Partial<RecordingFrameMark>;
+    return (
+      typeof m.id === 'string' &&
+      typeof m.sessionId === 'string' &&
+      Number.isFinite(Number(m.timestamp)) &&
+      Number.isFinite(Number(m.startedAt)) &&
+      Number.isFinite(Number(m.elapsedMs)) &&
+      Boolean(m.page)
+    );
+  });
 }
 
 function renderRecordingReadme(input: {
@@ -720,19 +806,17 @@ function renderRecordingReadme(input: {
   lines.push('- Subtitles: [transcript.srt](./transcript.srt)');
   if (input.provider && input.model)
     lines.push(`- Transcription: ${input.provider} / ${input.model}`);
-  if (input.frames.length) {
-    lines.push(`- Keyword frames: ${input.frames.length}`);
-  }
+  lines.push(`- Manual frame marks: ${input.frames.length}`);
   if (input.frames.length) {
     lines.push('');
-    lines.push('## Keyword frames');
+    lines.push('## Manual frame marks');
     lines.push('');
     for (const frame of input.frames) {
-      const clip = frame.clip ? ` · [clip](./frames/${frame.clip})` : '';
       lines.push(
-        `- ${formatSrtTime(frame.atMs)} · ${frame.keywords.join(', ')} · [frame](./frames/${frame.image})${clip}`,
+        `- ${formatSrtTime(frame.atMs)} (${Math.round(frame.atMs / 1000)}s) · [frame](./frames/${frame.image})`,
       );
-      lines.push(`  ${frame.text}`);
+      lines.push(`  Page: ${frame.mark.page.title || '(untitled)'} · ${frame.mark.page.url}`);
+      lines.push(`  Target: ${targetLabel(frame.mark)}`);
     }
   }
   lines.push('');
@@ -743,11 +827,7 @@ function renderRecordingReadme(input: {
   return lines.join('\n');
 }
 
-function buildTranscriptCues(
-  transcript: string,
-  durationMs: number,
-  frameKeywords: string[],
-): TranscriptCue[] {
+function buildTranscriptCues(transcript: string, durationMs: number): TranscriptCue[] {
   const text = transcript.replace(/\s+/g, ' ').trim();
   if (!text) return [];
   const parts = splitTranscript(text);
@@ -760,7 +840,6 @@ function buildTranscriptCues(
       startMs: start,
       endMs: Math.max(start + 800, end),
       text: part,
-      keywords: matchKeywords(part, frameKeywords),
     };
   });
 }
@@ -773,15 +852,15 @@ function renderEstimatedSrt(cues: TranscriptCue[]): string {
     .join('\n');
 }
 
-async function extractKeywordFrames(
+async function extractMarkedFrames(
   dir: FileSystemDirectoryHandle,
   videoName: string,
-  cues: TranscriptCue[],
+  frameMarks: RecordingFrameMark[],
 ): Promise<ExtractedFrame[]> {
-  const matches = dedupeFrameCues(cues.filter((cue) => cue.keywords.length > 0)).slice(0, 24);
+  const marks = dedupeFrameMarks(frameMarks);
   const framesDir = await dir.getDirectoryHandle('frames', { create: true });
   await clearDirectory(framesDir);
-  if (!matches.length) {
+  if (!marks.length) {
     await writeTextFile(framesDir, 'frames.json', '[]');
     return [];
   }
@@ -792,30 +871,18 @@ async function extractKeywordFrames(
   const frames: ExtractedFrame[] = [];
 
   try {
-    for (const [index, cue] of matches.entries()) {
-      const atMs = clampMs(Math.round((cue.startMs + cue.endMs) / 2), videoDurationMs(video));
+    for (const [index, mark] of marks.entries()) {
+      const atMs = clampMs(mark.elapsedMs, videoDurationMs(video));
       const image = `frame-${String(index + 1).padStart(2, '0')}-${String(
         Math.round(atMs / 1000),
       ).padStart(4, '0')}s.png`;
       await seekVideo(video, atMs);
       await writeBlobFile(framesDir, image, await captureVideoFrame(video));
-      let clip: string | null = null;
-      if (index < 8) {
-        const clipBlob = await captureVideoClip(video, atMs);
-        if (clipBlob) {
-          clip = image.replace(/\.png$/, '.webm');
-          await writeBlobFile(framesDir, clip, clipBlob);
-        }
-      }
       frames.push({
         index: index + 1,
         atMs,
-        cueStartMs: cue.startMs,
-        cueEndMs: cue.endMs,
-        keywords: cue.keywords,
-        text: cue.text,
         image,
-        clip,
+        mark,
       });
     }
   } finally {
@@ -829,52 +896,33 @@ async function extractKeywordFrames(
   return frames;
 }
 
-function dedupeFrameCues(cues: TranscriptCue[]): TranscriptCue[] {
-  const out: TranscriptCue[] = [];
-  for (const cue of cues) {
-    const atMs = Math.round((cue.startMs + cue.endMs) / 2);
+function dedupeFrameMarks(marks: RecordingFrameMark[]): RecordingFrameMark[] {
+  const out: RecordingFrameMark[] = [];
+  for (const mark of [...marks].sort((a, b) => a.elapsedMs - b.elapsedMs)) {
     const previous = out[out.length - 1];
-    if (previous && atMs - Math.round((previous.startMs + previous.endMs) / 2) < 1500) {
-      previous.keywords = Array.from(new Set([...previous.keywords, ...cue.keywords]));
-      previous.text = `${previous.text} ${cue.text}`.trim();
-      previous.endMs = Math.max(previous.endMs, cue.endMs);
-    } else {
-      out.push({ ...cue, keywords: [...cue.keywords] });
+    if (
+      previous &&
+      Math.abs(previous.elapsedMs - mark.elapsedMs) < 250 &&
+      previous.page.url === mark.page.url &&
+      previous.target?.selector === mark.target?.selector
+    ) {
+      continue;
     }
+    out.push(mark);
   }
   return out;
 }
 
-function matchKeywords(text: string, frameKeywords: string[]): string[] {
-  const haystack = normalizeText(text);
-  const matches: string[] = [];
-  for (const keyword of normalizeKeywords(frameKeywords)) {
-    if (haystack.includes(keyword.normalized)) matches.push(keyword.label);
-  }
-  return matches;
-}
-
-function normalizeKeywords(frameKeywords: string[]): Array<{ label: string; normalized: string }> {
-  const out: Array<{ label: string; normalized: string }> = [];
-  const seen = new Set<string>();
-  for (const raw of frameKeywords) {
-    const label = raw.replace(/\s+/g, ' ').trim();
-    const normalized = normalizeText(label);
-    if (!label || !normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push({ label, normalized });
-  }
-  return out;
-}
-
-function normalizeText(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function targetLabel(mark: RecordingFrameMark): string {
+  const target = mark.target;
+  if (!target) return '(no element target)';
+  const bits = [
+    target.selector,
+    target.textPreview ? `"${target.textPreview}"` : null,
+    target.role ? `role=${target.role}` : null,
+    target.ariaLabel ? `aria=${target.ariaLabel}` : null,
+  ].filter(Boolean);
+  return bits.join(' · ') || target.tag;
 }
 
 async function loadVideo(file: File): Promise<HTMLVideoElement> {
@@ -911,49 +959,6 @@ async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
   const { canvas, context } = createVideoCanvas(video);
   drawVideoFrame(video, context, canvas);
   return canvasToBlob(canvas, 'image/png');
-}
-
-async function captureVideoClip(video: HTMLVideoElement, centerMs: number): Promise<Blob | null> {
-  if (typeof MediaRecorder === 'undefined') return null;
-  if (typeof HTMLCanvasElement === 'undefined' || !HTMLCanvasElement.prototype.captureStream) {
-    return null;
-  }
-
-  const { canvas, context } = createVideoCanvas(video);
-  const stream = canvas.captureStream(12);
-  const chunks: Blob[] = [];
-  const mimeType = preferredClipMimeType();
-  let recorder: MediaRecorder;
-  try {
-    recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  } catch {
-    stopTracks(stream);
-    return null;
-  }
-  const done = new Promise<Blob>((resolve) => {
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
-    recorder.onstop = () => {
-      resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' }));
-    };
-  });
-  const duration = videoDurationMs(video);
-  const start = clampMs(centerMs - 1500, duration);
-  const end = clampMs(centerMs + 1500, duration);
-
-  await seekVideo(video, start);
-  drawVideoFrame(video, context, canvas);
-  recorder.start();
-  for (let atMs = start; atMs <= end; atMs += 125) {
-    await seekVideo(video, atMs);
-    drawVideoFrame(video, context, canvas);
-    await delay(70);
-  }
-  recorder.stop();
-  const blob = await done;
-  stopTracks(stream);
-  return blob.size > 0 ? blob : null;
 }
 
 function createVideoCanvas(video: HTMLVideoElement): {
@@ -1029,18 +1034,6 @@ async function clearDirectory(dir: FileSystemDirectoryHandle): Promise<void> {
   for await (const [name] of iterable.entries()) {
     await dir.removeEntry(name, { recursive: true });
   }
-}
-
-function preferredClipMimeType(): string {
-  if (typeof MediaRecorder === 'undefined') return '';
-  for (const type of ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']) {
-    if (MediaRecorder.isTypeSupported(type)) return type;
-  }
-  return '';
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function splitTranscript(text: string): string[] {

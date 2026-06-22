@@ -38,15 +38,19 @@ import {
   stopRecording,
 } from './audio-recorder.js';
 import { snapshotNetworkFailures } from './network-failures.js';
-import { checkGitHelper, commitSessionSnapshot } from './git-helper.js';
+import { checkGitHelper, commitSessionSnapshot, type GitCommitResult } from './git-helper.js';
 import {
+  addRecordingFrameMark,
   annotationRecordingContext,
+  clearSessionRecording,
+  recordingFrameMarks,
   startSessionRecording,
   stopSessionRecording,
 } from './recording-state.js';
 import {
   getDebugStatus,
   recordDebugContentEvent,
+  setDebugLastError,
   startDebugSession,
   stopDebugSession,
 } from './debug-session.js';
@@ -338,12 +342,19 @@ async function handle(
       stopSessionRecording(req.sessionId);
       return ok({});
     }
+    case 'recording:frame-mark': {
+      return ok({ marks: addRecordingFrameMark(req.mark) });
+    }
+    case 'recording:frame-marks': {
+      return ok({ marks: recordingFrameMarks(req.sessionId) });
+    }
     case 'recording:finalize': {
       const session = await getSessionRecord(req.sessionId);
       if (!session) return err('Session not found');
       stopSessionRecording(req.sessionId);
       await regenerateSessionReadme(session);
       await commitActiveSession(session, 'Save recorded session');
+      clearSessionRecording(req.sessionId);
       return ok({});
     }
     case 'debug:start': {
@@ -353,11 +364,16 @@ async function handle(
       const session = await getSessionRecord(req.sessionId);
       if (!session) return err('Session not found');
       try {
-        const status = await startDebugSession(req.tabId, session);
+        const settings = await loadSettings();
+        const status = await startDebugSession(req.tabId, session, settings.debug);
         await regenerateSessionReadme(session).catch((e) =>
           log.debug('debug start readme regen skipped', e),
         );
-        await commitActiveSession(session, 'Start debug capture session');
+        const commit = await commitActiveSession(session, 'Start debug capture session');
+        if (!commit.ok) {
+          status.lastError = `Git commit failed: ${commit.error}`;
+          setDebugLastError(req.tabId, status.lastError);
+        }
         return ok({ status });
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
@@ -369,7 +385,11 @@ async function handle(
       try {
         const status = await stopDebugSession(req.tabId, req.sessionId);
         await regenerateSessionReadme(session);
-        await commitActiveSession(session, 'Save debug capture session');
+        const commit = await commitActiveSession(session, 'Save debug capture session');
+        if (!commit.ok) {
+          status.lastError = `Git commit failed: ${commit.error}`;
+          setDebugLastError(req.tabId, status.lastError);
+        }
         return ok({ status });
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
@@ -470,11 +490,16 @@ async function findSessionForCancel(
   return null;
 }
 
-async function commitActiveSession(session: Session, message: string): Promise<void> {
+async function commitActiveSession(session: Session, message: string): Promise<GitCommitResult> {
   const [settings, vault] = await Promise.all([loadSettings(), getStatus()]);
-  await commitSessionSnapshot(session, settings, message, vault.rootName).catch((e) =>
-    log.debug('git commit skipped', e),
+  const result = await commitSessionSnapshot(session, settings, message, vault.rootName).catch(
+    (e): GitCommitResult => ({
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    }),
   );
+  if (!result.ok) log.warn('git commit skipped', result.error);
+  return result;
 }
 
 function commitPreview(comment: string): string {

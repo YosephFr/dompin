@@ -634,7 +634,7 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
             {showHero && activeSession ? (
               <RecordingHero
                 session={activeSession}
-                frameKeywords={state.settings.recording.frameKeywords}
+                tabId={origin.tabId}
                 onError={(message) => setError(message || null)}
               />
             ) : null}

@@ -48,7 +48,8 @@ export const en = {
     pause: 'Pause',
     resume: 'Resume',
     stop: 'Stop',
-    hint: 'Captures screen video and microphone narration while the picker stays independent.',
+    hint: 'Captures screen video and microphone. Mark frames with Cmd/Ctrl + Shift + click.',
+    frameMarks: (n: number) => `${n} frame mark${n === 1 ? '' : 's'} saved with the shortcut.`,
     saved: 'Recording saved in this session.',
     pending: 'A saved recording still needs processing.',
     retry: 'Retry',
@@ -60,7 +61,7 @@ export const en = {
     start: 'Start debugging',
     stop: 'Stop debugging',
     working: 'Working…',
-    hint: 'Captures clicks, views, screenshots, network bodies, and console output.',
+    hint: 'Captures external APIs, clicks, and views. Console and aggressive mode live in settings.',
     statsLabel: 'Debug capture counters',
     events: ' events',
     network: ' network',
@@ -151,13 +152,13 @@ export const en = {
       "You'll see a numbered marker on the element and the file appears immediately in your session folder.",
     step6Title: 'Record longer sessions when needed',
     step6Tip:
-      'Use Record session to capture screen and microphone. The video is saved first in the session folder, and DOMPin shows Retry if processing fails.',
+      'Use Record session to capture screen and microphone. Mark video frames with Cmd/Ctrl + Shift + click. The video is saved first, and DOMPin shows Retry if processing fails.',
     step7Title: 'Enable local Git only after setup',
     step7Tip:
       'Git checkpoints require a one-time local companion install. After that, each annotation and edit is versioned inside the session.',
     step8Title: 'Use debugging capture for technical investigations',
     step8Tip:
-      'Start Debug capture when you need clicks, view changes, screenshots, API payloads, response bodies, and console output saved continuously in the session.',
+      'Start Debug capture when you need clicks, view changes, screenshots, and external API payloads. Console capture and aggressive mode are enabled from settings.',
   },
   reconnect: {
     message: 'Folder access expired. Reconnect to continue.',

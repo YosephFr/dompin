@@ -1,6 +1,7 @@
 export type ThemePreference = 'auto' | 'light' | 'dark';
 export type LocalePreference = 'auto' | 'en' | 'es';
 export type TranscriptionProvider = 'elevenlabs' | 'openai';
+export type DebugCaptureMode = 'soft' | 'aggressive';
 
 export interface GitSettings {
   enabled: boolean;
@@ -8,12 +9,17 @@ export interface GitSettings {
   vaultPath: string;
 }
 
-export interface RecordingSettings {
-  frameKeywords: string[];
+export type RecordingSettings = Record<string, never>;
+
+export interface DebugCaptureSettings {
+  mode: DebugCaptureMode;
+  captureConsole: boolean;
+  captureScreenshots: boolean;
+  dedupeRequests: boolean;
 }
 
 export interface Settings {
-  schemaVersion: 3;
+  schemaVersion: 4;
   allowlist: string[];
   flags: {
     captureNetworkFailures: boolean;
@@ -34,10 +40,11 @@ export interface Settings {
   };
   git: GitSettings;
   recording: RecordingSettings;
+  debug: DebugCaptureSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   allowlist: ['*'],
   flags: {
     captureNetworkFailures: false,
@@ -61,23 +68,12 @@ export const DEFAULT_SETTINGS: Settings = {
     helperName: 'com.yosephfr.dompin_git',
     vaultPath: '',
   },
-  recording: {
-    frameKeywords: [
-      'aqui',
-      'aquí',
-      'mira',
-      'esto',
-      'captura',
-      'mira esto',
-      'justo esto',
-      'aca',
-      'acá',
-      'este punto',
-      'esta parte',
-      'fijate',
-      'observa',
-      'en este momento',
-    ],
+  recording: {},
+  debug: {
+    mode: 'soft',
+    captureConsole: false,
+    captureScreenshots: true,
+    dedupeRequests: true,
   },
 };
 
@@ -89,13 +85,23 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
   const transcription = { ...DEFAULT_SETTINGS.transcription, ...(p.transcription ?? {}) };
   const git = { ...DEFAULT_SETTINGS.git, ...(p.git ?? {}) };
   if (incomingVersion < 3 && p.git?.enabled === false) git.enabled = true;
-  const recording = { ...DEFAULT_SETTINGS.recording, ...(p.recording ?? {}) };
-  if (!Array.isArray(recording.frameKeywords) || recording.frameKeywords.length === 0) {
-    recording.frameKeywords = DEFAULT_SETTINGS.recording.frameKeywords;
-  }
+  const recording = { ...DEFAULT_SETTINGS.recording };
+  const rawDebug = { ...DEFAULT_SETTINGS.debug, ...(p.debug ?? {}) };
+  const debug: DebugCaptureSettings = {
+    mode: rawDebug.mode === 'aggressive' ? 'aggressive' : 'soft',
+    captureConsole: Boolean(rawDebug.captureConsole),
+    captureScreenshots:
+      typeof rawDebug.captureScreenshots === 'boolean'
+        ? rawDebug.captureScreenshots
+        : DEFAULT_SETTINGS.debug.captureScreenshots,
+    dedupeRequests:
+      typeof rawDebug.dedupeRequests === 'boolean'
+        ? rawDebug.dedupeRequests
+        : DEFAULT_SETTINGS.debug.dedupeRequests,
+  };
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 3, allowlist, flags, preferences, transcription, git, recording };
+  return { schemaVersion: 4, allowlist, flags, preferences, transcription, git, recording, debug };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {

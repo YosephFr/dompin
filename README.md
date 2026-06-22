@@ -15,7 +15,12 @@ DOMPin is a Chrome extension that lets you click any element or drag a custom re
 3. Hit **Start picking**, click any element on the page, type a comment, press Enter. To mark a custom area instead of a DOM node, click and drag a rectangle over the region you want. Chain as many pins as you want — the picker stays on until you stop it.
 4. Use the microphone button to record audio and insert a provider transcript into the visible note, or use the attachment button to add screenshots and files to the pin before sending.
 5. Need a quick one-off without leaving your flow? Hit `⌘⇧.` (Mac) / `Ctrl⇧.` (Win/Linux) for a single-shot pick that auto-stops, or right-click any element and choose **Annotate element with DOMPin** to capture transient UI like dropdowns and popovers without dismissing them.
-6. Open the vault folder in your editor and let your AI agent work from it.
+6. For longer walkthroughs, use **Record session**. DOMPin saves the video first, transcribes the
+   narration, and lets you mark exact video frames with `⌘/Ctrl + Shift + click` while recording.
+7. For technical investigations, use **Debug capture**. The default mode records external API calls,
+   clicks, view changes, and linked screenshots; aggressive same-origin capture and console capture
+   are optional settings.
+8. Open the vault folder in your editor and let your AI agent work from it.
 
 ## File layout
 

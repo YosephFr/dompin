@@ -1,9 +1,11 @@
 import type {
+  DebugClickTarget,
   DebugCaptureStatus,
   DebugContentEvent,
   Session,
   WrittenFile,
 } from '../common/types.js';
+import type { DebugCaptureSettings } from '../common/settings.js';
 import { sanitizeSegment } from '../common/path-sanitize.js';
 import { createLogger } from '../common/logger.js';
 import { ensureWritable } from './vault.js';
@@ -24,8 +26,19 @@ interface DebugRuntimeEvent {
   timestamp: number;
   elapsedMs: number;
   screenshot: string | null;
+  relatedRequests: DebugRelatedRequest[];
   page: DebugContentEvent['page'];
   content: DebugContentEvent;
+}
+
+interface DebugRelatedRequest {
+  id: number;
+  file: string;
+  method: string;
+  url: string;
+  status: number | null;
+  elapsedMs: number;
+  durationMs: number | null;
 }
 
 interface DebugRequestRecord {
@@ -42,12 +55,14 @@ interface DebugRequestRecord {
   requestBodyPath?: string;
   responseBodyPath?: string;
   responseBodyError?: string;
+  filePath?: string;
 }
 
 interface DebugSessionState {
   tabId: number;
   target: DebuggerTarget;
   session: Session;
+  settings: DebugCaptureSettings;
   startedAt: number;
   stoppedAt: number | null;
   eventSeq: number;
@@ -57,6 +72,11 @@ interface DebugSessionState {
   consoleCount: number;
   lastError: string | null;
   requests: Map<string, DebugRequestRecord>;
+  seenRequestKeys: Set<string>;
+  seenViewUrls: Set<string>;
+  events: Map<number, DebugRuntimeEvent>;
+  completedRequests: DebugRequestRecord[];
+  currentPageOrigin: string | null;
   pendingScreenshots: Set<Promise<void>>;
   queue: Promise<unknown>;
 }
@@ -107,6 +127,7 @@ export function setupDebugSessions(): void {
 export async function startDebugSession(
   tabId: number,
   session: Session,
+  settings: DebugCaptureSettings,
 ): Promise<DebugCaptureStatus> {
   const existing = sessionsByTab.get(tabId);
   if (existing) {
@@ -117,10 +138,12 @@ export async function startDebugSession(
 
   const target = { tabId };
   await attachDebugger(target);
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
   const state: DebugSessionState = {
     tabId,
     target,
     session,
+    settings,
     startedAt: Date.now(),
     stoppedAt: null,
     eventSeq: 0,
@@ -130,20 +153,30 @@ export async function startDebugSession(
     consoleCount: 0,
     lastError: null,
     requests: new Map(),
+    seenRequestKeys: new Set(),
+    seenViewUrls: new Set(),
+    events: new Map(),
+    completedRequests: [],
+    currentPageOrigin: safeOrigin(tab?.url),
     pendingScreenshots: new Set(),
     queue: Promise.resolve(),
   };
   sessionsByTab.set(tabId, state);
   try {
     await ensureDebugScaffold(state);
-    await Promise.all([
+    const commands: Array<Promise<unknown>> = [
       sendDebuggerCommand(target, 'Network.enable', {
         maxPostDataSize: REQUEST_POST_DATA_LIMIT,
       }),
-      sendDebuggerCommand(target, 'Runtime.enable'),
-      sendDebuggerCommand(target, 'Log.enable'),
       sendDebuggerCommand(target, 'Page.enable'),
-    ]);
+    ];
+    if (settings.captureConsole) {
+      commands.push(
+        sendDebuggerCommand(target, 'Runtime.enable'),
+        sendDebuggerCommand(target, 'Log.enable'),
+      );
+    }
+    await Promise.all(commands);
   } catch (e) {
     sessionsByTab.delete(tabId);
     await detachDebugger(target).catch(() => undefined);
@@ -171,6 +204,7 @@ export async function stopDebugSession(
   await Promise.allSettled(Array.from(state.pendingScreenshots));
   await serialize(state, async () => {
     await writeOpenRequests(state);
+    await rewriteDebugEvents(state);
     await writeSessionSummary(state);
     await writeDebugReadme(state);
   });
@@ -189,12 +223,27 @@ export function getDebugStatus(tabId?: number): DebugCaptureStatus {
   return state ? statusFor(state) : inactiveStatus();
 }
 
+export function setDebugLastError(tabId: number, message: string): void {
+  const state = sessionsByTab.get(tabId);
+  if (state) {
+    state.lastError = message;
+    return;
+  }
+  const current = lastStatusByTab.get(tabId) ?? inactiveStatus();
+  lastStatusByTab.set(tabId, { ...current, lastError: message });
+}
+
 export async function recordDebugContentEvent(
   tabId: number,
   event: DebugContentEvent,
 ): Promise<DebugCaptureStatus> {
   const state = sessionsByTab.get(tabId);
   if (!state) return inactiveStatus();
+  state.currentPageOrigin = safeOrigin(event.page.url) ?? state.currentPageOrigin;
+  if (event.type === 'view' && state.settings.mode === 'soft') {
+    if (state.seenViewUrls.has(event.page.url)) return statusFor(state);
+    state.seenViewUrls.add(event.page.url);
+  }
   const id = state.eventSeq + 1;
   state.eventSeq = id;
   const item: DebugRuntimeEvent = {
@@ -203,16 +252,20 @@ export async function recordDebugContentEvent(
     timestamp: event.timestamp,
     elapsedMs: Math.max(0, event.timestamp - state.startedAt),
     screenshot: null,
+    relatedRequests: [],
     page: event.page,
     content: event,
   };
+  state.events.set(item.id, item);
   await serialize(state, async () => {
     await writeDebugEvent(state, item);
     await writeSessionSummary(state);
   });
-  const screenshotJob = completeDebugEventScreenshot(state, item);
-  state.pendingScreenshots.add(screenshotJob);
-  void screenshotJob.finally(() => state.pendingScreenshots.delete(screenshotJob));
+  if (state.settings.captureScreenshots) {
+    const screenshotJob = completeDebugEventScreenshot(state, item);
+    state.pendingScreenshots.add(screenshotJob);
+    void screenshotJob.finally(() => state.pendingScreenshots.delete(screenshotJob));
+  }
   return statusFor(state);
 }
 
@@ -245,11 +298,11 @@ async function handleDebuggerEvent(
       await handleLoadingFinished(state, params);
     } else if (method === 'Network.loadingFailed') {
       await handleLoadingFailed(state, params);
-    } else if (method === 'Runtime.consoleAPICalled') {
+    } else if (state.settings.captureConsole && method === 'Runtime.consoleAPICalled') {
       await handleConsoleCalled(state, params);
-    } else if (method === 'Runtime.exceptionThrown') {
+    } else if (state.settings.captureConsole && method === 'Runtime.exceptionThrown') {
       await handleExceptionThrown(state, params);
-    } else if (method === 'Log.entryAdded') {
+    } else if (state.settings.captureConsole && method === 'Log.entryAdded') {
       await handleLogEntry(state, params);
     }
   } catch (e) {
@@ -265,6 +318,8 @@ async function handleRequestWillBeSent(
   const requestId = stringValue(params['requestId']);
   if (!requestId) return;
   const request = objectValue(params['request']);
+  const requestUrl = stringValue(request['url']);
+  const method = stringValue(request['method']) || 'GET';
   const startedAt = Number(params['wallTime'])
     ? Math.round(Number(params['wallTime']) * 1000)
     : Date.now();
@@ -275,8 +330,8 @@ async function handleRequestWillBeSent(
     elapsedMs: Math.max(0, startedAt - state.startedAt),
     type: stringValue(params['type']) || 'Other',
     request: {
-      url: stringValue(request['url']),
-      method: stringValue(request['method']) || 'GET',
+      url: requestUrl,
+      method,
       headers: request['headers'] ?? {},
       hasPostData: Boolean(request['hasPostData']),
       mixedContentType: request['mixedContentType'] ?? null,
@@ -284,6 +339,10 @@ async function handleRequestWillBeSent(
       documentURL: stringValue(params['documentURL']),
     },
   };
+  if (!shouldTrackNetworkRecord(state, record)) return;
+  const requestKey = `${method.toUpperCase()} ${requestUrl}`;
+  if (state.settings.dedupeRequests && state.seenRequestKeys.has(requestKey)) return;
+  state.seenRequestKeys.add(requestKey);
   state.requestSeq = record.id;
   state.requests.set(requestId, record);
   await persistRequestPostData(state, record, stringValue(request['postData']));
@@ -324,6 +383,7 @@ async function handleLoadingFinished(
   await persistResponseBody(state, record);
   state.networkCount += 1;
   state.requests.delete(record.requestId);
+  state.completedRequests.push(record);
   await serialize(state, async () => {
     await writeNetworkRecord(state, record);
     await writeSessionSummary(state);
@@ -341,6 +401,7 @@ async function handleLoadingFailed(
   record.error = stringValue(params['errorText']) || 'Network loading failed.';
   state.networkCount += 1;
   state.requests.delete(record.requestId);
+  state.completedRequests.push(record);
   await serialize(state, async () => {
     await writeNetworkRecord(state, record);
     await writeSessionSummary(state);
@@ -455,6 +516,7 @@ async function writeOpenRequests(state: DebugSessionState): Promise<void> {
     record.finishedAt = Date.now();
     record.durationMs = Math.max(0, record.finishedAt - record.startedAt);
     record.error = record.error ?? 'Still in flight when debug capture stopped.';
+    state.completedRequests.push(record);
     await writeNetworkRecord(state, record);
   }
   state.requests.clear();
@@ -473,6 +535,7 @@ async function captureDebugScreenshot(
 
 async function writeDebugEvent(state: DebugSessionState, item: DebugRuntimeEvent): Promise<void> {
   const dirs = await getDebugDirs(state.session);
+  item.relatedRequests = relatedRequestsForEvent(state, item);
   await writeJson(dirs.events, `${seqName(item.id)}-${item.type}.json`, {
     sessionId: state.session.id,
     sessionName: state.session.name,
@@ -485,7 +548,9 @@ async function writeNetworkRecord(
   record: DebugRequestRecord,
 ): Promise<void> {
   const dirs = await getDebugDirs(state.session);
-  await writeJson(dirs.network, `${networkFileBase(record)}.json`, {
+  const name = `${networkFileBase(record)}.json`;
+  record.filePath = `./network/${name}`;
+  await writeJson(dirs.network, name, {
     sessionId: state.session.id,
     sessionName: state.session.name,
     ...record,
@@ -509,6 +574,7 @@ async function writeSessionSummary(state: DebugSessionState): Promise<void> {
       console: state.consoleCount,
       inFlightRequests: state.requests.size,
     },
+    capture: state.settings,
     paths: {
       events: './events/',
       screenshots: './screenshots/',
@@ -521,12 +587,20 @@ async function writeSessionSummary(state: DebugSessionState): Promise<void> {
 
 async function writeDebugReadme(state: DebugSessionState): Promise<void> {
   const dirs = await getDebugDirs(state.session);
+  const events = Array.from(state.events.values()).sort((a, b) => a.timestamp - b.timestamp);
+  const requests = [...state.completedRequests].sort((a, b) => a.startedAt - b.startedAt);
   const lines: string[] = [];
   lines.push(`# Debug capture - ${state.session.name}`);
   lines.push('');
   lines.push(`- Started: ${new Date(state.startedAt).toISOString()}`);
   if (state.stoppedAt) lines.push(`- Stopped: ${new Date(state.stoppedAt).toISOString()}`);
   lines.push(`- Duration: ${formatDuration((state.stoppedAt ?? Date.now()) - state.startedAt)}`);
+  lines.push(`- Mode: ${state.settings.mode}`);
+  lines.push(`- Console capture: ${state.settings.captureConsole ? 'enabled' : 'disabled'}`);
+  lines.push(`- Screenshot capture: ${state.settings.captureScreenshots ? 'enabled' : 'disabled'}`);
+  lines.push(
+    `- Duplicate request filter: ${state.settings.dedupeRequests ? 'enabled' : 'disabled'}`,
+  );
   lines.push(`- View/click events: ${state.eventSeq}`);
   lines.push(`- Completed network requests: ${state.networkCount}`);
   lines.push(`- Console entries: ${state.consoleCount}`);
@@ -539,8 +613,50 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
   lines.push('- [Screenshots](./screenshots/)');
   lines.push('- [Network](./network/)');
   lines.push('- [Console](./console/)');
+  if (events.length) {
+    lines.push('');
+    lines.push('## Timeline');
+    lines.push('');
+    for (const item of events) {
+      const eventFile = `./events/${seqName(item.id)}-${item.type}.json`;
+      const screenshot = item.screenshot ? ` · [screenshot](${item.screenshot})` : '';
+      const target =
+        item.content.type === 'click' ? ` · ${targetPreview(item.content.target)}` : '';
+      lines.push(
+        `- ${formatClock(item.elapsedMs)} · ${item.type} · [event](${eventFile})${screenshot}${target}`,
+      );
+      lines.push(`  Page: ${item.page.title || '(untitled)'} · ${item.page.url}`);
+      if (item.relatedRequests.length) {
+        lines.push(
+          `  Related network: ${item.relatedRequests.map((r) => requestLink(r)).join(' · ')}`,
+        );
+      } else {
+        lines.push('  Related network: none captured in the event window.');
+      }
+    }
+  }
+  if (requests.length) {
+    lines.push('');
+    lines.push('## Network requests');
+    lines.push('');
+    for (const record of requests) {
+      lines.push(`- ${requestSummary(record)}`);
+    }
+  }
+  if (!state.settings.captureConsole) {
+    lines.push('');
+    lines.push('## Console');
+    lines.push('');
+    lines.push('Console capture was disabled for this session.');
+  }
   lines.push('');
   await writeText(dirs.root, 'README.md', lines.join('\n'));
+}
+
+async function rewriteDebugEvents(state: DebugSessionState): Promise<void> {
+  for (const item of state.events.values()) {
+    await writeDebugEvent(state, item);
+  }
 }
 
 async function ensureDebugScaffold(state: DebugSessionState): Promise<void> {
@@ -680,6 +796,102 @@ async function writeDataUrl(
 function requestRecord(state: DebugSessionState, requestId: unknown): DebugRequestRecord | null {
   const id = stringValue(requestId);
   return id ? (state.requests.get(id) ?? null) : null;
+}
+
+function shouldTrackNetworkRecord(state: DebugSessionState, record: DebugRequestRecord): boolean {
+  if (state.settings.mode === 'aggressive') return true;
+  const url = String(record.request['url'] ?? '');
+  const method = String(record.request['method'] ?? 'GET').toUpperCase();
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
+  const requestOrigin = safeOrigin(url);
+  if (!requestOrigin) return false;
+  const documentOrigin = safeOrigin(String(record.request['documentURL'] ?? ''));
+  const sourceOrigin = documentOrigin ?? state.currentPageOrigin;
+  if (!sourceOrigin || requestOrigin === sourceOrigin) return false;
+  const type = String(record.type || '').toLowerCase();
+  if (['image', 'stylesheet', 'font', 'media', 'script'].includes(type)) return false;
+  return true;
+}
+
+function relatedRequestsForEvent(
+  state: DebugSessionState,
+  item: DebugRuntimeEvent,
+): DebugRelatedRequest[] {
+  const startsAt = item.timestamp - 1000;
+  const endsAt = item.timestamp + 5000;
+  return state.completedRequests
+    .filter((record) => record.startedAt >= startsAt && record.startedAt <= endsAt)
+    .slice(0, 12)
+    .map((record) => ({
+      id: record.id,
+      file: record.filePath ?? `./network/${networkFileBase(record)}.json`,
+      method: String(record.request['method'] ?? 'GET'),
+      url: String(record.request['url'] ?? ''),
+      status: typeof record.response?.['status'] === 'number' ? record.response['status'] : null,
+      elapsedMs: record.elapsedMs,
+      durationMs: typeof record.durationMs === 'number' ? record.durationMs : null,
+    }));
+}
+
+function requestLink(request: DebugRelatedRequest): string {
+  const status = request.status == null ? 'pending' : String(request.status);
+  return `[${request.method.toUpperCase()} ${status} ${shortUrl(request.url)}](${request.file})`;
+}
+
+function requestSummary(record: DebugRequestRecord): string {
+  const file = record.filePath ?? `./network/${networkFileBase(record)}.json`;
+  const method = String(record.request['method'] ?? 'GET').toUpperCase();
+  const url = String(record.request['url'] ?? '');
+  const status = typeof record.response?.['status'] === 'number' ? record.response['status'] : null;
+  const parts = [
+    `${formatClock(record.elapsedMs)} · [${method} ${status ?? 'pending'} ${shortUrl(url)}](${file})`,
+  ];
+  if (typeof record.durationMs === 'number') parts.push(`${record.durationMs}ms`);
+  if (record.requestBodyPath) parts.push(`[request body](${record.requestBodyPath})`);
+  if (record.responseBodyPath) parts.push(`[response body](${record.responseBodyPath})`);
+  if (record.error) parts.push(`error: ${record.error}`);
+  return parts.join(' · ');
+}
+
+function targetPreview(target: DebugClickTarget | null): string {
+  if (!target) return '(no target)';
+  const bits = [
+    target.selector,
+    target.textPreview ? `"${target.textPreview}"` : null,
+    target.role ? `role=${target.role}` : null,
+    target.ariaLabel ? `aria=${target.ariaLabel}` : null,
+  ].filter(Boolean);
+  return bits.join(' · ') || target.tag;
+}
+
+function safeOrigin(url: string | undefined | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+function shortUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const text = `${u.host}${u.pathname}${u.search}`;
+    return text.length > 92 ? text.slice(0, 89) + '...' : text;
+  } catch {
+    return url.length > 92 ? url.slice(0, 89) + '...' : url;
+  }
+}
+
+function formatClock(ms: number): string {
+  const clamped = Math.max(0, Math.round(ms));
+  const totalSeconds = Math.floor(clamped / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const millis = clamped % 1000;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(
+    millis,
+  ).padStart(3, '0')}`;
 }
 
 function serializeRemoteObject(value: unknown): unknown {

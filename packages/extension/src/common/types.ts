@@ -161,6 +161,17 @@ export interface DebugContentClickEvent {
 
 export type DebugContentEvent = DebugContentViewEvent | DebugContentClickEvent;
 
+export interface RecordingFrameMark {
+  id: string;
+  sessionId: string;
+  timestamp: number;
+  startedAt: number;
+  elapsedMs: number;
+  page: PageContext;
+  pointer: DebugContentClickEvent['pointer'];
+  target: DebugClickTarget | null;
+}
+
 export interface DebugCaptureStatus {
   active: boolean;
   sessionId: string | null;

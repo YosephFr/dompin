@@ -217,17 +217,18 @@ recording/
   frames/
     frames.json
     frame-01-0004s.png
-    frame-01-0004s.webm
 ```
 
 `recording.json` links the saved screen video, microphone narration, transcript, subtitles, and
-keyword-triggered frames. Frames are extracted after transcription when a configured keyword or
-phrase appears in the estimated subtitles.
+manual frame marks. During recording, `⌘/Ctrl + Shift + click` stores a frame mark with the
+recording timestamp, page URL, pointer coordinates, and clicked target metadata. After transcription
+finishes, DOMPin extracts one PNG from the saved video for each mark and lists the exact timestamp in
+`recording/README.md`.
 
 ## Debug capture sessions
 
 When the user starts Debug capture, DOMPin attaches Chrome's debugger protocol to that tab for the
-duration of the capture and writes a continuous technical trace under `debug/`:
+duration of the capture and writes a technical trace under `debug/`:
 
 ```
 debug/
@@ -246,13 +247,20 @@ debug/
     0001.json
 ```
 
-- `session.json` contains capture timing, counts, paths, and the last capture error if any.
+- `session.json` contains capture timing, counts, active capture settings, paths, and the last
+  capture error if any.
 - `events/` contains automatic `view` and `click` events with page context, click target metadata,
-  elapsed time, and screenshot path.
-- `screenshots/` contains viewport PNGs taken shortly after each view or click event.
-- `network/` contains one JSON file per request plus request/response body sidecar files when
-  Chrome exposes them through the debugger protocol.
-- `console/` contains console calls, browser log entries, and uncaught exception details.
+  elapsed time, screenshot path, and nearby related network request links.
+- `screenshots/` contains viewport PNGs taken shortly after each view or click event when screenshot
+  capture is enabled.
+- `network/` contains one JSON file per captured request plus request/response body sidecar files
+  when Chrome exposes them through the debugger protocol. The default mode captures only external
+  API-like requests and skips duplicate method+URL pairs. Aggressive mode captures same-origin and
+  browser-level request noise too.
+- `console/` contains console calls, browser log entries, and uncaught exception details only when
+  console capture is enabled.
+- `debug/README.md` includes a timeline that links each click or view screenshot to network calls
+  that occurred around that moment.
 
 Debug capture is separate from manual annotation ordinals: it does not create `NN.md` pin files and
 does not change the annotation count.

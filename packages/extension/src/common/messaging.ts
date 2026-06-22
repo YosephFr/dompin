@@ -2,6 +2,7 @@ import type {
   AnnotationAttachment,
   DebugCaptureStatus,
   DebugContentEvent,
+  RecordingFrameMark,
   AnnotationPayload,
   PinForPage,
   RectInfo,
@@ -57,6 +58,8 @@ export type RequestMessage =
   | { kind: 'audio:record-cancel' }
   | { kind: 'recording:session-start'; sessionId: string; startedAt: number }
   | { kind: 'recording:session-stop'; sessionId: string }
+  | { kind: 'recording:frame-mark'; mark: RecordingFrameMark }
+  | { kind: 'recording:frame-marks'; sessionId: string }
   | { kind: 'recording:finalize'; sessionId: string }
   | { kind: 'debug:start'; tabId: number; sessionId: string }
   | { kind: 'debug:stop'; tabId: number; sessionId: string }
@@ -103,6 +106,7 @@ export interface RecordedAudioResult extends Partial<TranscriptResult> {
 export type TranscriptionResp = Resp<TranscriptResult | RecordedAudioResult>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 export type RecordingSaveResp = Resp<{ files: { relativePath: string; bytes: number }[] }>;
+export type RecordingFrameMarksResp = Resp<{ marks: RecordingFrameMark[] }>;
 export type GitStatusResp = Resp<{ available: boolean; message: string }>;
 export type DebugStatusResp = Resp<{ status: DebugCaptureStatus }>;
 
@@ -118,6 +122,8 @@ export type TabCommand =
   | { kind: 'pins:update' }
   | { kind: 'debug:capture-start'; startedAt: number }
   | { kind: 'debug:capture-stop' }
+  | { kind: 'recording:frame-capture-start'; startedAt: number; sessionId: string }
+  | { kind: 'recording:frame-capture-stop' }
   | { kind: 'picker:needs-session' };
 
 export type BroadcastMessage =

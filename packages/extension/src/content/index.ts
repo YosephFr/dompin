@@ -1,4 +1,9 @@
-import type { DebugClickTarget, RectInfo, PinForPage } from '../common/types.js';
+import type {
+  DebugClickTarget,
+  RectInfo,
+  PinForPage,
+  RecordingFrameMark,
+} from '../common/types.js';
 import type { TabCommand } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
 import { isOriginAllowed, type Settings } from '../common/settings.js';
@@ -46,6 +51,9 @@ class ContentApp {
   private urlPollId: number | null = null;
   private stopping = false;
   private debugCaptureActive = false;
+  private recordingFrameCaptureActive = false;
+  private recordingFrameStartedAt = 0;
+  private recordingFrameSessionId: string | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -237,6 +245,22 @@ class ContentApp {
     document.removeEventListener('click', this.handleDebugClick, true);
   }
 
+  private startRecordingFrameCapture(startedAt: number, sessionId: string): void {
+    this.recordingFrameStartedAt = startedAt;
+    this.recordingFrameSessionId = sessionId;
+    if (this.recordingFrameCaptureActive) return;
+    this.recordingFrameCaptureActive = true;
+    document.addEventListener('click', this.handleRecordingFrameClick, true);
+  }
+
+  private stopRecordingFrameCapture(): void {
+    if (!this.recordingFrameCaptureActive) return;
+    this.recordingFrameCaptureActive = false;
+    this.recordingFrameStartedAt = 0;
+    this.recordingFrameSessionId = null;
+    document.removeEventListener('click', this.handleRecordingFrameClick, true);
+  }
+
   private handleDebugClick = (ev: MouseEvent): void => {
     if (!this.debugCaptureActive) return;
     const target = ev.target instanceof Element ? ev.target : null;
@@ -262,6 +286,36 @@ class ContentApp {
       },
     };
     void sendRequest(payload);
+  };
+
+  private handleRecordingFrameClick = (ev: MouseEvent): void => {
+    if (!this.recordingFrameCaptureActive || !this.recordingFrameSessionId) return;
+    if (!ev.shiftKey || (!ev.metaKey && !ev.ctrlKey)) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (target && this.isOurDom(target)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const timestamp = Date.now();
+    const mark: RecordingFrameMark = {
+      id: randomId(),
+      sessionId: this.recordingFrameSessionId,
+      timestamp,
+      startedAt: this.recordingFrameStartedAt,
+      elapsedMs: Math.max(0, timestamp - this.recordingFrameStartedAt),
+      page: capturePage(),
+      pointer: {
+        x: ev.clientX,
+        y: ev.clientY,
+        button: ev.button,
+        buttons: ev.buttons,
+        altKey: ev.altKey,
+        ctrlKey: ev.ctrlKey,
+        metaKey: ev.metaKey,
+        shiftKey: ev.shiftKey,
+      },
+      target: target ? this.captureDebugTarget(target) : null,
+    };
+    void sendRequest({ kind: 'recording:frame-mark', mark });
   };
 
   private sendDebugView(trigger: 'start' | 'url-change' | 'reload', previousUrl: string | null) {
@@ -480,6 +534,14 @@ class ContentApp {
           this.stopDebugCapture();
           sendResponse({ ok: true });
           return false;
+        case 'recording:frame-capture-start':
+          this.startRecordingFrameCapture(cmd.startedAt, cmd.sessionId);
+          sendResponse({ ok: true });
+          return false;
+        case 'recording:frame-capture-stop':
+          this.stopRecordingFrameCapture();
+          sendResponse({ ok: true });
+          return false;
       }
       return false;
     });
@@ -557,6 +619,7 @@ class ContentApp {
     }
     this.picker.stop();
     this.stopDebugCapture();
+    this.stopRecordingFrameCapture();
     this.popup.destroy();
     this.markers.destroy();
     this.regionRect.destroy();
@@ -580,6 +643,12 @@ function safeSelector(el: Element): string | null {
   } catch {
     return null;
   }
+}
+
+function randomId(): string {
+  return typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `mark-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 async function bootstrap(): Promise<void> {

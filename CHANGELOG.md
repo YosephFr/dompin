@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-06-21
+
+### Changed
+
+- **Recorded-session frames are now explicit.** Transcript keyword detection was removed; while recording, press `⌘/Ctrl + Shift + click` on the page to mark exact frame timestamps. The recording README lists each marked second, page, target, and extracted PNG frame.
+- **Debug capture defaults to a quieter API-focused mode.** By default it records external API-like requests, click/view events, and screenshots, while skipping same-origin noise, duplicate method+URL calls, repeated view captures, and console output.
+- **Aggressive debug capture is now an advanced setting.** Settings can re-enable same-origin/browser-level request capture, console output, screenshots, and duplicate request writes when a deeper trace is needed.
+- **Debug briefs now cross-reference evidence.** `debug/README.md` includes a timeline that links each click/view screenshot to nearby captured network requests.
+- **Git checkpoint failures are surfaced.** If closing a debug capture writes files but the local Git companion cannot commit them, the side panel keeps the failure visible instead of swallowing it in a debug log.
+
 ## [0.5.0] — 2026-06-21
 
 ### Added

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import type { Settings, TranscriptionProvider } from '../common/settings.js';
+import type { DebugCaptureMode, Settings, TranscriptionProvider } from '../common/settings.js';
 import type { VaultStatus } from '../common/types.js';
 import type { ExtensionState } from '../common/messaging.js';
 import { sendRequest } from '../common/messaging.js';
@@ -37,7 +37,6 @@ export function App(): JSX.Element {
   const [savedFolderName, setSavedFolderName] = useState<string | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [allowlistText, setAllowlistText] = useState('');
-  const [frameKeywordsText, setFrameKeywordsText] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [gitCheck, setGitCheck] = useState<string | null>(null);
@@ -58,7 +57,6 @@ export function App(): JSX.Element {
     setState(resp.state);
     setDraft(resp.state.settings);
     setAllowlistText(resp.state.settings.allowlist.join('\n'));
-    setFrameKeywordsText(resp.state.settings.recording.frameKeywords.join('\n'));
     if (resp.state.vault.configured) {
       setStep('settings');
       setSavedFolderName(resp.state.vault.rootName);
@@ -70,17 +68,11 @@ export function App(): JSX.Element {
   const dirty = useMemo(() => {
     if (!state || !draft) return false;
     if (!sameAllowlist(parseAllowlist(allowlistText), draft.allowlist)) return true;
-    if (!sameStringArray(parseFrameKeywords(frameKeywordsText), draft.recording.frameKeywords))
-      return true;
     return !sameSettings(state.settings, {
       ...draft,
       allowlist: parseAllowlist(allowlistText),
-      recording: {
-        ...draft.recording,
-        frameKeywords: parseFrameKeywords(frameKeywordsText),
-      },
     });
-  }, [state, draft, allowlistText, frameKeywordsText]);
+  }, [state, draft, allowlistText]);
 
   async function pickFolder(): Promise<void> {
     setPickError(null);
@@ -191,6 +183,17 @@ export function App(): JSX.Element {
     );
   }
 
+  function setDebug<K extends keyof Settings['debug']>(key: K, value: Settings['debug'][K]): void {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            debug: { ...d.debug, [key]: value },
+          }
+        : d,
+    );
+  }
+
   async function saveSettings(): Promise<void> {
     if (!draft) return;
     setSavingSettings(true);
@@ -199,10 +202,6 @@ export function App(): JSX.Element {
       const next = mergeSettings({
         ...draft,
         allowlist: parseAllowlist(allowlistText),
-        recording: {
-          ...draft.recording,
-          frameKeywords: parseFrameKeywords(frameKeywordsText),
-        },
       });
       const resp = await sendRequest({ kind: 'settings:save', settings: next });
       if (!resp.ok) {
@@ -212,7 +211,6 @@ export function App(): JSX.Element {
       setState((prev) => (prev ? { ...prev, settings: next } : prev));
       setDraft(next);
       setAllowlistText(next.allowlist.join('\n'));
-      setFrameKeywordsText(next.recording.frameKeywords.join('\n'));
     } finally {
       setSavingSettings(false);
     }
@@ -226,10 +224,6 @@ export function App(): JSX.Element {
       const next = mergeSettings({
         ...draft,
         allowlist: parseAllowlist(allowlistText),
-        recording: {
-          ...draft.recording,
-          frameKeywords: parseFrameKeywords(frameKeywordsText),
-        },
       });
       await sendRequest({ kind: 'settings:save', settings: next });
       const resp = await sendRequest<{ available: boolean; message: string }>({
@@ -344,6 +338,7 @@ export function App(): JSX.Element {
   const flags = draft?.flags ?? state.settings.flags;
   const transcription = draft?.transcription ?? state.settings.transcription;
   const git = draft?.git ?? state.settings.git;
+  const debug = draft?.debug ?? state.settings.debug;
 
   return (
     <div className="page">
@@ -500,18 +495,82 @@ export function App(): JSX.Element {
 
       <section className="section">
         <div className="section-head">
-          <h2>Recorded session frames</h2>
+          <h2>Debug capture</h2>
         </div>
         <p className="section-hint">
-          One keyword or phrase per line. When a recorded session transcript contains one of these,
-          DOMPin saves a still frame and a short WebM clip from that moment.
+          The default mode records external API calls, view changes, and clicks without same-site
+          request noise. Use aggressive mode only when you need a complete browser-level trace.
         </p>
-        <textarea
-          className="textarea"
-          value={frameKeywordsText}
-          spellCheck={false}
-          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFrameKeywordsText(e.target.value)}
-        />
+        <label className="toggle">
+          <span className="toggle-text">
+            <span className="toggle-label">Aggressive capture</span>
+            <span className="toggle-description">
+              Includes same-origin requests and repeated view captures for deeper investigations.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle-input"
+            checked={debug.mode === 'aggressive'}
+            onChange={(e) =>
+              setDebug('mode', (e.target.checked ? 'aggressive' : 'soft') as DebugCaptureMode)
+            }
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </label>
+        <label className="toggle">
+          <span className="toggle-text">
+            <span className="toggle-label">Capture console output</span>
+            <span className="toggle-description">
+              Saves console logs, browser log entries, and exceptions during debug sessions.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle-input"
+            checked={debug.captureConsole}
+            onChange={(e) => setDebug('captureConsole', e.target.checked)}
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </label>
+        <label className="toggle">
+          <span className="toggle-text">
+            <span className="toggle-label">Save click and view screenshots</span>
+            <span className="toggle-description">
+              Adds screenshots to the debug timeline and links nearby network calls in the brief.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle-input"
+            checked={debug.captureScreenshots}
+            onChange={(e) => setDebug('captureScreenshots', e.target.checked)}
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </label>
+        <label className="toggle">
+          <span className="toggle-text">
+            <span className="toggle-label">Skip duplicate requests</span>
+            <span className="toggle-description">
+              Avoids writing the same method and URL more than once per debug session.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle-input"
+            checked={debug.dedupeRequests}
+            onChange={(e) => setDebug('dedupeRequests', e.target.checked)}
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </label>
       </section>
 
       <section className="section">
@@ -628,19 +687,6 @@ function parseAllowlist(text: string): string[] {
   return lines.length > 0 ? lines : ['*'];
 }
 
-function parseFrameKeywords(text: string): string[] {
-  const seen = new Set<string>();
-  const lines: string[] = [];
-  for (const line of text.split('\n')) {
-    const value = line.replace(/\s+/g, ' ').trim();
-    const key = value.toLowerCase();
-    if (!value || seen.has(key)) continue;
-    seen.add(key);
-    lines.push(value);
-  }
-  return lines.length ? lines : mergeSettings(undefined).recording.frameKeywords;
-}
-
 function sameAllowlist(a: string[], b: string[]): boolean {
   return sameStringArray(a, b);
 }
@@ -664,6 +710,8 @@ function sameSettings(a: Settings, b: Settings): boolean {
   for (const k of Object.keys(a.git) as Array<keyof Settings['git']>) {
     if (a.git[k] !== b.git[k]) return false;
   }
-  if (!sameStringArray(a.recording.frameKeywords, b.recording.frameKeywords)) return false;
+  for (const k of Object.keys(a.debug) as Array<keyof Settings['debug']>) {
+    if (a.debug[k] !== b.debug[k]) return false;
+  }
   return true;
 }

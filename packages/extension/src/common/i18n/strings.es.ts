@@ -50,7 +50,9 @@ export const es: Strings = {
     pause: 'Pausar',
     resume: 'Reanudar',
     stop: 'Detener',
-    hint: 'Captura video de pantalla y narración del micrófono con el picker independiente.',
+    hint: 'Captura video y micrófono. Marcá frames con ⌘/Ctrl + Shift + clic mientras grabás.',
+    frameMarks: (n: number) =>
+      `${n} frame${n === 1 ? '' : 's'} marcado${n === 1 ? '' : 's'} con atajo.`,
     saved: 'Grabación guardada en esta sesión.',
     pending: 'Hay una grabación guardada que falta procesar.',
     retry: 'Reintentar',
@@ -62,7 +64,7 @@ export const es: Strings = {
     start: 'Iniciar depuración',
     stop: 'Detener depuración',
     working: 'Procesando…',
-    hint: 'Captura clics, vistas, screenshots, cuerpos de red y salida de consola.',
+    hint: 'Captura APIs externas, clics y vistas. La consola y el modo agresivo viven en ajustes.',
     statsLabel: 'Contadores de depuración',
     events: ' eventos',
     network: ' red',
@@ -154,13 +156,13 @@ export const es: Strings = {
       'Vas a ver un marcador numerado sobre el elemento y el archivo aparece al instante en la carpeta de tu sesión.',
     step6Title: 'Grabá sesiones largas cuando haga falta',
     step6Tip:
-      'Usá Grabar sesión para capturar pantalla y micrófono. El video se guarda primero en la carpeta de la sesión y, si algo falla al procesarlo, DOMPin muestra Reintentar.',
+      'Usá Grabar sesión para capturar pantalla y micrófono. Marcá frames del video con ⌘/Ctrl + Shift + clic. El video se guarda primero y, si algo falla al procesarlo, DOMPin muestra Reintentar.',
     step7Title: 'Activá Git local solo cuando esté instalado',
     step7Tip:
       'Los checkpoints Git requieren instalar una vez el companion local. Después cada anotación y edición queda versionada dentro de la sesión.',
     step8Title: 'Usá depuración para investigar problemas técnicos',
     step8Tip:
-      'Iniciá Depuración cuando necesites guardar continuamente clics, cambios de vista, screenshots, payloads de API, respuestas y salida de consola dentro de la sesión.',
+      'Iniciá Depuración cuando necesites guardar clics, cambios de vista, screenshots y payloads de APIs externas. La consola y el modo agresivo se activan desde ajustes.',
   },
   reconnect: {
     message: 'El acceso a la carpeta expiró. Reconectá para continuar.',
