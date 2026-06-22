@@ -1,6 +1,6 @@
 {
   "name": "dompin",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
   "description": "Pin elements on any web page and write annotated DOM context, screenshots, and component info to a local folder for your AI coding agent.",
   "license": "MIT",

@@ -250,9 +250,12 @@ debug/
 - `session.json` contains capture timing, counts, active capture settings, paths, and the last
   capture error if any.
 - `events/` contains automatic `view` and `click` events with page context, click target metadata,
-  elapsed time, screenshot path, and nearby related network request links.
-- `screenshots/` contains viewport PNGs taken shortly after each view or click event when screenshot
-  capture is enabled.
+  elapsed time, screenshot path, screenshot kind, and nearby related network request links. Click
+  targets include selector, XPath, text preview, outerHTML preview, bounding rect, computed style
+  groups, React info when available, and scroll ancestor data.
+- `screenshots/` contains viewport PNGs for view changes and padded element-crop PNGs for click
+  events when screenshot capture is enabled. Click crops include the DOMPin highlighted target and
+  about 100 CSS pixels of surrounding context.
 - `network/` contains one JSON file per captured request plus request/response body sidecar files
   when Chrome exposes them through the debugger protocol. The default mode captures only external
   API-like requests and skips duplicate method+URL pairs. Aggressive mode captures same-origin and

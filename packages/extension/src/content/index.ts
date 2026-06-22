@@ -51,6 +51,7 @@ class ContentApp {
   private urlPollId: number | null = null;
   private stopping = false;
   private debugCaptureActive = false;
+  private debugHighlightTimer: number | null = null;
   private recordingFrameCaptureActive = false;
   private recordingFrameStartedAt = 0;
   private recordingFrameSessionId: string | null = null;
@@ -243,6 +244,9 @@ class ContentApp {
     if (!this.debugCaptureActive) return;
     this.debugCaptureActive = false;
     document.removeEventListener('click', this.handleDebugClick, true);
+    if (this.debugHighlightTimer != null) window.clearTimeout(this.debugHighlightTimer);
+    this.debugHighlightTimer = null;
+    this.highlight.hide();
   }
 
   private startRecordingFrameCapture(startedAt: number, sessionId: string): void {
@@ -265,6 +269,7 @@ class ContentApp {
     if (!this.debugCaptureActive) return;
     const target = ev.target instanceof Element ? ev.target : null;
     if (target && this.isOurDom(target)) return;
+    if (target) this.flashDebugTarget(target);
     const timestamp = Date.now();
     const payload = {
       kind: 'debug:event' as const,
@@ -287,6 +292,15 @@ class ContentApp {
     };
     void sendRequest(payload);
   };
+
+  private flashDebugTarget(el: Element): void {
+    this.highlight.show(el);
+    if (this.debugHighlightTimer != null) window.clearTimeout(this.debugHighlightTimer);
+    this.debugHighlightTimer = window.setTimeout(() => {
+      this.highlight.hide();
+      this.debugHighlightTimer = null;
+    }, 1800);
+  }
 
   private handleRecordingFrameClick = (ev: MouseEvent): void => {
     if (!this.recordingFrameCaptureActive || !this.recordingFrameSessionId) return;
@@ -348,6 +362,9 @@ class ContentApp {
         textPreview: captured.textPreview,
         outerHTMLPreview: captured.outerHTMLPreview,
         boundingRect: captured.boundingRect,
+        computedStyles: captured.computedStyles,
+        react: captured.react,
+        scrollAncestorSelector: captured.scrollAncestorSelector,
       };
     } catch {
       const rect = el.getBoundingClientRect();
@@ -620,6 +637,7 @@ class ContentApp {
     this.picker.stop();
     this.stopDebugCapture();
     this.stopRecordingFrameCapture();
+    if (this.debugHighlightTimer != null) window.clearTimeout(this.debugHighlightTimer);
     this.popup.destroy();
     this.markers.destroy();
     this.regionRect.destroy();

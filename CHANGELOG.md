@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-06-21
+
+### Changed
+
+- **Debug click screenshots now behave like automatic element captures.** View changes still save a full-tab screenshot, but click events now save a cropped element screenshot with about 100px of padding around the clicked target.
+- **Debug click targets now include richer DOM metadata.** Click event JSON now keeps computed style groups, React info when available, and scroll ancestor data alongside selector, XPath, text, and outerHTML preview.
+- **Debug click screenshots include the DOMPin highlight.** The clicked element stays highlighted briefly so the crop shows the same shaded selection box used by regular annotations.
+
 ## [0.5.2] — 2026-06-21
 
 ### Changed

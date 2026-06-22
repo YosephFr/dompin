@@ -9,13 +9,14 @@ import type { DebugCaptureSettings } from '../common/settings.js';
 import { sanitizeSegment } from '../common/path-sanitize.js';
 import { createLogger } from '../common/logger.js';
 import { ensureWritable } from './vault.js';
-import { captureViewport } from './screenshot.js';
+import { captureElement as captureElementImage, captureViewport } from './screenshot.js';
 import { sendTabCommandWithInject } from './tab-bridge.js';
 
 const log = createLogger('debug-session');
 
 const SCREENSHOT_DELAY_MS = 900;
 const SCREENSHOT_MIN_INTERVAL_MS = 1500;
+const CLICK_SCREENSHOT_PADDING = 100;
 const BODY_TEXT_LIMIT = 10_000_000;
 const REQUEST_POST_DATA_LIMIT = 10_000_000;
 
@@ -27,6 +28,7 @@ interface DebugRuntimeEvent {
   timestamp: number;
   elapsedMs: number;
   screenshot: string | null;
+  screenshotKind: 'viewport' | 'element' | null;
   relatedRequests: DebugRelatedRequest[];
   page: DebugContentEvent['page'];
   content: DebugContentEvent;
@@ -278,6 +280,7 @@ export async function recordDebugContentEvent(
     timestamp: event.timestamp,
     elapsedMs: Math.max(0, event.timestamp - state.startedAt),
     screenshot: null,
+    screenshotKind: null,
     relatedRequests: [],
     page: event.page,
     content: event,
@@ -564,10 +567,20 @@ async function captureDebugScreenshot(
   state: DebugSessionState,
   item: DebugRuntimeEvent,
 ): Promise<string> {
-  const dataUrl = await captureViewport(state.tabId);
+  const dataUrl =
+    item.content.type === 'click' && item.content.target
+      ? await captureElementImage(
+          state.tabId,
+          item.content.target.boundingRect,
+          item.page.viewport.devicePixelRatio,
+          CLICK_SCREENSHOT_PADDING,
+        )
+      : await captureViewport(state.tabId);
   const dirs = await getDebugDirs(state.session);
   const name = `${seqName(item.id)}-${item.type}.png`;
   await writeDataUrl(dirs.screenshots, name, dataUrl);
+  item.screenshotKind =
+    item.content.type === 'click' && item.content.target ? 'element' : 'viewport';
   return `./screenshots/${name}`;
 }
 
@@ -657,7 +670,9 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
     lines.push('');
     for (const item of events) {
       const eventFile = `./events/${seqName(item.id)}-${item.type}.json`;
-      const screenshot = item.screenshot ? ` · [screenshot](${item.screenshot})` : '';
+      const screenshot = item.screenshot
+        ? ` · [${item.screenshotKind === 'element' ? 'element crop' : 'viewport'}](${item.screenshot})`
+        : '';
       const target =
         item.content.type === 'click' ? ` · ${targetPreview(item.content.target)}` : '';
       lines.push(

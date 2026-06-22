@@ -132,6 +132,9 @@ export interface DebugClickTarget {
   textPreview: string | null;
   outerHTMLPreview: string;
   boundingRect: RectInfo;
+  computedStyles?: ComputedStyleSubset | null;
+  react?: ReactInfo | null;
+  scrollAncestorSelector?: string | null;
 }
 
 export interface DebugContentViewEvent {

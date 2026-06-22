@@ -18,8 +18,8 @@ DOMPin is a Chrome extension that lets you click any element or drag a custom re
 6. For longer walkthroughs, use **Record session**. DOMPin saves the video first, transcribes the
    narration, and lets you mark exact video frames with `⌘ + Ctrl + click` while recording.
 7. For technical investigations, use **Debug capture**. The default mode records external API calls,
-   clicks, view changes, and linked screenshots; aggressive same-origin capture and console capture
-   are optional settings.
+   clicks, view changes, full-view screenshots for navigation, and padded element crops for clicks;
+   aggressive same-origin capture and console capture are optional settings.
 8. Open the vault folder in your editor and let your AI agent work from it.
 
 ## File layout
