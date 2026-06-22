@@ -243,7 +243,7 @@ async function regenerateSessionReadmeFromDir(
   dir: FileSystemDirectoryHandle,
 ): Promise<void> {
   const entries = await readSessionIndex(dir);
-  const md = renderSessionReadme(session, entries);
+  const md = renderSessionReadme(session, entries, await hasRecording(dir));
   await writeText(dir, 'README.md', md);
 }
 
@@ -400,6 +400,16 @@ async function safeRemove(
   }
 }
 
+async function hasRecording(dir: FileSystemDirectoryHandle): Promise<boolean> {
+  try {
+    const recordingDir = await dir.getDirectoryHandle('recording');
+    await recordingDir.getFileHandle('recording.json');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readSessionIndex(dir: FileSystemDirectoryHandle): Promise<IndexEntry[]> {
   const out: IndexEntry[] = [];
   for await (const [name, handle] of dir as unknown as DirIterable) {
@@ -487,6 +497,10 @@ function jsonToAnnotationPayload(json: Record<string, unknown>): AnnotationPaylo
     attachments: Array.isArray(json['attachments'])
       ? (json['attachments'] as AnnotationPayload['attachments'])
       : undefined,
+    recording:
+      typeof json['recording'] === 'object' && json['recording'] !== null
+        ? (json['recording'] as AnnotationPayload['recording'])
+        : undefined,
   };
 }
 
@@ -544,6 +558,13 @@ function renderAnnotationMarkdown(
     lines.push('## Voice transcript');
     lines.push('');
     lines.push(payload.voiceTranscript.trim());
+    lines.push('');
+  }
+  if (payload.recording) {
+    lines.push('## Recording timestamp');
+    lines.push('');
+    lines.push(`- Elapsed: ${formatDuration(payload.recording.elapsedMs)}`);
+    lines.push(`- Captured: ${new Date(payload.recording.capturedAt).toISOString()}`);
     lines.push('');
   }
   appendAttachmentsSection(lines, payload.attachments);
@@ -692,7 +713,11 @@ function appendNetworkSection(lines: string[], entries: AnnotationPayload['netwo
   lines.push('');
 }
 
-function renderSessionReadme(session: Session, entries: IndexEntry[]): string {
+function renderSessionReadme(
+  session: Session,
+  entries: IndexEntry[],
+  recordingAvailable: boolean,
+): string {
   const lines: string[] = [];
   const startedAt = new Date(session.startedAt).toISOString();
   const lastWriteAt = entries.length
@@ -713,6 +738,12 @@ function renderSessionReadme(session: Session, entries: IndexEntry[]): string {
     for (const p of pages) {
       lines.push(`- ${p.title || p.url} — ${p.url}`);
     }
+    lines.push('');
+  }
+  if (recordingAvailable) {
+    lines.push('## Recording');
+    lines.push('');
+    lines.push('- [Recorded session assets](./recording/README.md)');
     lines.push('');
   }
   if (entries.length) {
@@ -748,8 +779,22 @@ function uniquePages(entries: IndexEntry[]): { url: string; title: string }[] {
 
 function formatHms(ts: number): string {
   const d = new Date(ts);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m ${seconds}s`;
+  }
+  return `${minutes}m ${seconds}s`;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
 function escapeMd(s: string): string {

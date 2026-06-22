@@ -23,6 +23,7 @@ import { ActiveSessionCard } from './components/ActiveSessionCard.js';
 import { PinListCard } from './components/PinListCard.js';
 import { RecentSessionsCard } from './components/RecentSessionsCard.js';
 import { PickerHero, type PickerState } from './components/PickerHero.js';
+import { RecordingHero } from './components/RecordingHero.js';
 
 export function App(): JSX.Element {
   const [locale, setLocale] = useState<'en' | 'es'>(() => resolveLocale('auto'));
@@ -77,6 +78,7 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   const [pins, setPins] = useState<PinForPage[]>([]);
   const [recent, setRecent] = useState<SessionListItem[]>([]);
   const [pickerOn, setPickerOn] = useState(false);
+  const [markersVisible, setMarkersVisible] = useState(true);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
@@ -181,15 +183,18 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
   async function queryPickerState(tabId: number | null): Promise<void> {
     if (tabId == null) {
       setPickerOn(false);
+      setMarkersVisible(true);
       return;
     }
     try {
       const r = (await chrome.tabs.sendMessage(tabId, { kind: 'picker:query-state' })) as
-        | { ok: true; active: boolean }
+        | { ok: true; active: boolean; markersVisible?: boolean }
         | undefined;
       setPickerOn(Boolean(r?.active));
+      if (typeof r?.markersVisible === 'boolean') setMarkersVisible(r.markersVisible);
     } catch {
       setPickerOn(false);
+      setMarkersVisible(true);
     }
   }
 
@@ -298,6 +303,19 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
       if (!r.ok) setError(r.error);
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function toggleMarkersVisibility(): Promise<void> {
+    const tabId = originRef.current.tabId;
+    if (tabId == null) return;
+    const next = !markersVisible;
+    setMarkersVisible(next);
+    try {
+      await chrome.tabs.sendMessage(tabId, { kind: 'pins:set-visible', visible: next });
+    } catch {
+      setMarkersVisible(!next);
+      setError('PAGE:needs-refresh');
     }
   }
 
@@ -607,7 +625,15 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
               <PickerHero
                 state={pickerState}
                 busy={busy === 'toggle'}
+                markersVisible={markersVisible}
                 onToggle={() => void togglePicker()}
+                onToggleMarkers={() => void toggleMarkersVisibility()}
+              />
+            ) : null}
+            {showHero && activeSession ? (
+              <RecordingHero
+                session={activeSession}
+                onError={(message) => setError(message || null)}
               />
             ) : null}
             <PinListCard

@@ -38,6 +38,23 @@ export const es: Strings = {
     resume: 'Reanudar picker',
     working: 'Procesando…',
     hint: 'o clic derecho sobre un elemento para captura única',
+    hidePins: 'Ocultar pins guardados',
+    showPins: 'Mostrar pins guardados',
+  },
+  recording: {
+    idle: 'Grabación lista',
+    recording: 'Grabando',
+    paused: 'Grabación en pausa',
+    saving: 'Guardando grabación…',
+    start: 'Grabar sesión',
+    pause: 'Pausar',
+    resume: 'Reanudar',
+    stop: 'Detener',
+    hint: 'Captura video de pantalla y narración del micrófono con el picker independiente.',
+    saved: 'Grabación guardada en esta sesión.',
+    pending: 'Hay una grabación guardada que falta procesar.',
+    retry: 'Reintentar',
+    audioIssue: (message: string) => `Audio: ${message}`,
   },
   session: {
     eyebrow: 'Sesión',
@@ -122,6 +139,12 @@ export const es: Strings = {
     step5Title: 'Escribí tu comentario y dale Enter',
     step5Tip:
       'Vas a ver un marcador numerado sobre el elemento y el archivo aparece al instante en la carpeta de tu sesión.',
+    step6Title: 'Grabá sesiones largas cuando haga falta',
+    step6Tip:
+      'Usá Grabar sesión para capturar pantalla y micrófono. El video se guarda primero en la carpeta de la sesión y, si algo falla al procesarlo, DOMPin muestra Reintentar.',
+    step7Title: 'Activá Git local solo cuando esté instalado',
+    step7Tip:
+      'Los checkpoints Git requieren instalar una vez el companion local. Después cada anotación y edición queda versionada dentro de la sesión.',
   },
   reconnect: {
     message: 'El acceso a la carpeta expiró. Reconectá para continuar.',

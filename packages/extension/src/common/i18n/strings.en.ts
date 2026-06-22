@@ -36,6 +36,23 @@ export const en = {
     resume: 'Resume picking',
     working: 'Working…',
     hint: 'or right-click an element for one-off',
+    hidePins: 'Hide saved pins',
+    showPins: 'Show saved pins',
+  },
+  recording: {
+    idle: 'Recording ready',
+    recording: 'Recording',
+    paused: 'Recording paused',
+    saving: 'Saving recording…',
+    start: 'Record session',
+    pause: 'Pause',
+    resume: 'Resume',
+    stop: 'Stop',
+    hint: 'Captures screen video and microphone narration while the picker stays independent.',
+    saved: 'Recording saved in this session.',
+    pending: 'A saved recording still needs processing.',
+    retry: 'Retry',
+    audioIssue: (message: string) => `Audio note: ${message}`,
   },
   session: {
     eyebrow: 'Session',
@@ -119,6 +136,12 @@ export const en = {
     step5Title: 'Type your comment, hit Enter',
     step5Tip:
       "You'll see a numbered marker on the element and the file appears immediately in your session folder.",
+    step6Title: 'Record longer sessions when needed',
+    step6Tip:
+      'Use Record session to capture screen and microphone. The video is saved first in the session folder, and DOMPin shows Retry if processing fails.',
+    step7Title: 'Enable local Git only after setup',
+    step7Tip:
+      'Git checkpoints require a one-time local companion install. After that, each annotation and edit is versioned inside the session.',
   },
   reconnect: {
     message: 'Folder access expired. Reconnect to continue.',

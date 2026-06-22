@@ -63,6 +63,16 @@ export async function stopRecording(): Promise<RecordStopResult> {
   return res ?? { ok: false, error: 'Recorder is not available.' };
 }
 
+export async function pauseRecording(): Promise<RecordStartResult> {
+  const res = await sendToOffscreen<RecordStartResult>('pause');
+  return res ?? { ok: false, error: 'Recorder is not available.' };
+}
+
+export async function resumeRecording(): Promise<RecordStartResult> {
+  const res = await sendToOffscreen<RecordStartResult>('resume');
+  return res ?? { ok: false, error: 'Recorder is not available.' };
+}
+
 export async function cancelRecording(): Promise<void> {
   await sendToOffscreen('cancel');
 }
@@ -71,7 +81,9 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sendToOffscreen<T>(cmd: 'start' | 'stop' | 'cancel'): Promise<T | undefined> {
+function sendToOffscreen<T>(
+  cmd: 'start' | 'stop' | 'pause' | 'resume' | 'cancel',
+): Promise<T | undefined> {
   return chrome.runtime
     .sendMessage({ target: 'dompin-offscreen', cmd })
     .then((r) => r as T)

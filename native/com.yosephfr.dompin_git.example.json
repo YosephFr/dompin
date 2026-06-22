@@ -1,0 +1,7 @@
+{
+  "name": "com.yosephfr.dompin_git",
+  "description": "DOMPin local Git helper",
+  "path": "/ABSOLUTE/PATH/TO/dompin/native/dompin-git-helper.cjs",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://injhgiaeijgdbdcahdbmgfjdkjldlhli/"]
+}

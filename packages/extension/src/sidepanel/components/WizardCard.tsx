@@ -78,6 +78,14 @@ export function WizardCard({
         <Step n={5} title={t.wizard.step5Title}>
           <p className="tip">{t.wizard.step5Tip}</p>
         </Step>
+
+        <Step n={6} title={t.wizard.step6Title}>
+          <p className="tip">{t.wizard.step6Tip}</p>
+        </Step>
+
+        <Step n={7} title={t.wizard.step7Title}>
+          <p className="tip">{t.wizard.step7Tip}</p>
+        </Step>
       </ol>
     </section>
   );

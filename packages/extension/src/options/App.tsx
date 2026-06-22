@@ -39,6 +39,8 @@ export function App(): JSX.Element {
   const [allowlistText, setAllowlistText] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [gitCheck, setGitCheck] = useState<string | null>(null);
+  const [checkingGit, setCheckingGit] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
 
@@ -170,6 +172,17 @@ export function App(): JSX.Element {
     );
   }
 
+  function setGit<K extends keyof Settings['git']>(key: K, value: Settings['git'][K]): void {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            git: { ...d.git, [key]: value },
+          }
+        : d,
+    );
+  }
+
   async function saveSettings(): Promise<void> {
     if (!draft) return;
     setSavingSettings(true);
@@ -189,6 +202,29 @@ export function App(): JSX.Element {
       setAllowlistText(next.allowlist.join('\n'));
     } finally {
       setSavingSettings(false);
+    }
+  }
+
+  async function checkGitCompanion(): Promise<void> {
+    if (!draft) return;
+    setCheckingGit(true);
+    setGitCheck(null);
+    try {
+      const next = mergeSettings({
+        ...draft,
+        allowlist: parseAllowlist(allowlistText),
+      });
+      await sendRequest({ kind: 'settings:save', settings: next });
+      const resp = await sendRequest<{ available: boolean; message: string }>({
+        kind: 'git:status',
+      });
+      if (resp.ok) {
+        setGitCheck(resp.available ? resp.message : `Not connected: ${resp.message}`);
+      } else {
+        setGitCheck(`Not connected: ${resp.error}`);
+      }
+    } finally {
+      setCheckingGit(false);
     }
   }
 
@@ -290,6 +326,7 @@ export function App(): JSX.Element {
   const vault = state.vault;
   const flags = draft?.flags ?? state.settings.flags;
   const transcription = draft?.transcription ?? state.settings.transcription;
+  const git = draft?.git ?? state.settings.git;
 
   return (
     <div className="page">
@@ -334,6 +371,77 @@ export function App(): JSX.Element {
             Change folder…
           </button>
         </div>
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2>Local Git history</h2>
+        </div>
+        <p className="section-hint">
+          DOMPin can create a Git checkpoint inside each session folder after every annotation
+          change. Chrome requires a small local companion app for this because extensions cannot run
+          Git directly.
+        </p>
+        <label className="toggle">
+          <span className="toggle-text">
+            <span className="toggle-label">Enable automatic Git checkpoints</span>
+            <span className="toggle-description">
+              Leave this off unless the local Git companion has been installed on this computer.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle-input"
+            checked={git.enabled}
+            onChange={(e) => setGit('enabled', e.target.checked)}
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+        </label>
+        <ul className="requirement-list">
+          <li>
+            Install once with <code>native/install-macos.sh {chrome.runtime.id}</code>.
+          </li>
+          <li>Use the absolute path of the same folder selected as the vault.</li>
+          <li>Git must be installed on the computer.</li>
+        </ul>
+        <div className="row">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void checkGitCompanion()}
+            disabled={checkingGit}
+          >
+            {checkingGit ? 'Checking…' : 'Check companion'}
+          </button>
+          {gitCheck ? <span className="status-note">{gitCheck}</span> : null}
+        </div>
+        <details className="advanced-panel">
+          <summary>Advanced Git setup</summary>
+          <div className="field-grid">
+            <label className="field">
+              <span className="field-label">Companion name</span>
+              <input
+                className="input"
+                type="text"
+                value={git.helperName}
+                onChange={(e) => setGit('helperName', e.target.value)}
+                placeholder="com.yosephfr.dompin_git"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Vault absolute path</span>
+              <input
+                className="input"
+                type="text"
+                value={git.vaultPath}
+                onChange={(e) => setGit('vaultPath', e.target.value)}
+                placeholder="/Users/franco/anotaciones"
+              />
+            </label>
+          </div>
+        </details>
       </section>
 
       <section className="section">
@@ -504,6 +612,9 @@ function sameSettings(a: Settings, b: Settings): boolean {
   }
   for (const k of Object.keys(a.transcription) as Array<keyof Settings['transcription']>) {
     if (a.transcription[k] !== b.transcription[k]) return false;
+  }
+  for (const k of Object.keys(a.git) as Array<keyof Settings['git']>) {
+    if (a.git[k] !== b.git[k]) return false;
   }
   return true;
 }

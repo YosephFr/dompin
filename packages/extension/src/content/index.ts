@@ -366,7 +366,12 @@ class ContentApp {
             ok: true,
             active: this.picker.isActive(),
             mode: this.picker.getMode(),
+            markersVisible: this.markers.isVisible(),
           });
+          return false;
+        case 'pins:set-visible':
+          this.markers.setVisible(cmd.visible);
+          sendResponse({ ok: true, visible: cmd.visible });
           return false;
         case 'picker:needs-session':
           sendResponse({ ok: true });

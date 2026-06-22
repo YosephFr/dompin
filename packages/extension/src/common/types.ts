@@ -7,9 +7,16 @@ export interface AnnotationPayload {
   comment: string;
   voiceTranscript?: string;
   attachments?: AnnotationAttachment[];
+  recording?: AnnotationRecordingContext;
   screenshots: ScreenshotSet;
   console: ConsoleEntry[];
   network?: NetworkEntry[];
+}
+
+export interface AnnotationRecordingContext {
+  startedAt: number;
+  capturedAt: number;
+  elapsedMs: number;
 }
 
 export interface PageContext {

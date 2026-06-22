@@ -2,6 +2,12 @@ export type ThemePreference = 'auto' | 'light' | 'dark';
 export type LocalePreference = 'auto' | 'en' | 'es';
 export type TranscriptionProvider = 'elevenlabs' | 'openai';
 
+export interface GitSettings {
+  enabled: boolean;
+  helperName: string;
+  vaultPath: string;
+}
+
 export interface Settings {
   schemaVersion: 2;
   allowlist: string[];
@@ -22,6 +28,7 @@ export interface Settings {
     openAiModel: string;
     languageCode: string;
   };
+  git: GitSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -44,6 +51,11 @@ export const DEFAULT_SETTINGS: Settings = {
     openAiModel: 'gpt-4o-transcribe',
     languageCode: '',
   },
+  git: {
+    enabled: false,
+    helperName: 'com.yosephfr.dompin_git',
+    vaultPath: '',
+  },
 };
 
 export function mergeSettings(partial: Partial<Settings> | undefined): Settings {
@@ -51,9 +63,10 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
   const flags = { ...DEFAULT_SETTINGS.flags, ...(p.flags ?? {}) };
   const preferences = { ...DEFAULT_SETTINGS.preferences, ...(p.preferences ?? {}) };
   const transcription = { ...DEFAULT_SETTINGS.transcription, ...(p.transcription ?? {}) };
+  const git = { ...DEFAULT_SETTINGS.git, ...(p.git ?? {}) };
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 2, allowlist, flags, preferences, transcription };
+  return { schemaVersion: 2, allowlist, flags, preferences, transcription, git };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {

@@ -11,6 +11,7 @@ import {
   clearAllSessions,
   ensureSession,
   getActiveSession,
+  getSessionRecord,
   listSessions,
   newSession,
   renameSession,
@@ -29,8 +30,20 @@ import { captureElement, captureViewport } from './screenshot.js';
 import { gatePickerBySession } from './picker-gate.js';
 import { checkPageAccess } from './page-access.js';
 import { transcribeAudio } from './transcription.js';
-import { cancelRecording, startRecording, stopRecording } from './audio-recorder.js';
+import {
+  cancelRecording,
+  pauseRecording,
+  resumeRecording,
+  startRecording,
+  stopRecording,
+} from './audio-recorder.js';
 import { snapshotNetworkFailures } from './network-failures.js';
+import { checkGitHelper, commitSessionSnapshot } from './git-helper.js';
+import {
+  annotationRecordingContext,
+  startSessionRecording,
+  stopSessionRecording,
+} from './recording-state.js';
 
 const log = createLogger('router');
 
@@ -135,9 +148,21 @@ async function handle(
       try {
         const settings = await loadSettings();
         const network = settings.flags.captureNetworkFailures ? snapshotNetworkFailures(tabId) : [];
-        const payload = network.length ? { ...req.payload, network } : req.payload;
+        const recording = annotationRecordingContext(session.id);
+        const payload = {
+          ...req.payload,
+          ...(network.length ? { network } : {}),
+          ...(recording ? { recording } : {}),
+        };
         const result = await writeAnnotation(session, payload);
         await bumpSessionAnnotation(session.id, +1, pageUrl, pageTitle);
+        await commitSessionSnapshot(
+          session,
+          settings,
+          `Add annotation ${String(result.ordinal).padStart(2, '0')}: ${commitPreview(
+            payload.comment,
+          )}`,
+        );
         await broadcastToTabs({ kind: 'pins:update' });
         return ok({
           annotationId: payload.id,
@@ -155,6 +180,7 @@ async function handle(
       const result = await deleteAnnotation(session, req.annotationId);
       if (!result.ok) return err(result.error);
       await bumpSessionAnnotation(session.id, -1);
+      await commitActiveSession(session, `Delete annotation ${req.annotationId}`);
       await broadcastToTabs({ kind: 'pins:update' });
       return ok({});
     }
@@ -163,6 +189,10 @@ async function handle(
       if (!session) return err('Annotation not found in any active session');
       const result = await editAnnotationComment(session, req.annotationId, req.comment);
       if (!result.ok) return err(result.error);
+      await commitActiveSession(
+        session,
+        `Edit annotation ${req.annotationId}: ${commitPreview(req.comment)}`,
+      );
       await broadcastToTabs({ kind: 'pins:update' });
       return ok({});
     }
@@ -175,6 +205,10 @@ async function handle(
         attachments: req.attachments ?? [],
       });
       if (!result.ok) return err(result.error);
+      await commitActiveSession(
+        session,
+        `Edit annotation ${req.annotationId}: ${commitPreview(req.comment)}`,
+      );
       await broadcastToTabs({ kind: 'pins:update' });
       return ok({});
     }
@@ -229,14 +263,75 @@ async function handle(
           { audioDataUrl: r.audioDataUrl, mimeType: r.mimeType, fileName: r.fileName },
           settings,
         );
-        return ok({ text: result.text, provider: result.provider, model: result.model });
+        return ok({
+          text: result.text,
+          provider: result.provider,
+          model: result.model,
+          audioDataUrl: r.audioDataUrl,
+          mimeType: r.mimeType,
+          fileName: r.fileName,
+        });
       } catch (e) {
         return err(e instanceof Error ? e.message : String(e));
       }
     }
+    case 'audio:record-stop-raw': {
+      const r = await stopRecording();
+      if (!r.ok) return err(r.error);
+      if ('discarded' in r) return ok({ discarded: true });
+      const base = {
+        audioDataUrl: r.audioDataUrl,
+        mimeType: r.mimeType,
+        fileName: r.fileName,
+      };
+      try {
+        const settings = await loadSettings();
+        const result = await transcribeAudio(
+          { audioDataUrl: r.audioDataUrl, mimeType: r.mimeType, fileName: r.fileName },
+          settings,
+        );
+        return ok({ ...base, text: result.text, provider: result.provider, model: result.model });
+      } catch (e) {
+        return ok({
+          ...base,
+          text: '',
+          provider: '',
+          model: '',
+          transcriptionError: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+    case 'audio:record-pause': {
+      const r = await pauseRecording();
+      return r.ok ? ok({}) : err(r.error);
+    }
+    case 'audio:record-resume': {
+      const r = await resumeRecording();
+      return r.ok ? ok({}) : err(r.error);
+    }
     case 'audio:record-cancel': {
       await cancelRecording();
       return ok({});
+    }
+    case 'recording:session-start': {
+      startSessionRecording(req.sessionId, req.startedAt);
+      return ok({});
+    }
+    case 'recording:session-stop': {
+      stopSessionRecording(req.sessionId);
+      return ok({});
+    }
+    case 'recording:finalize': {
+      const session = await getSessionRecord(req.sessionId);
+      if (!session) return err('Session not found');
+      stopSessionRecording(req.sessionId);
+      await regenerateSessionReadme(session);
+      await commitActiveSession(session, 'Save recorded session');
+      return ok({});
+    }
+    case 'git:status': {
+      const settings = await loadSettings();
+      return ok(await checkGitHelper(settings));
     }
     case 'pins:for-tab': {
       const tabId = await resolveTabId(req.tabId, sender);
@@ -318,6 +413,18 @@ async function findSessionForCancel(
     }
   }
   return null;
+}
+
+async function commitActiveSession(session: Session, message: string): Promise<void> {
+  const settings = await loadSettings();
+  await commitSessionSnapshot(session, settings, message).catch((e) =>
+    log.debug('git commit skipped', e),
+  );
+}
+
+function commitPreview(comment: string): string {
+  const text = comment.replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, 72) : 'No comment';
 }
 
 async function resolveTabId(

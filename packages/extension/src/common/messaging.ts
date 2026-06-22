@@ -49,7 +49,14 @@ export type RequestMessage =
   | { kind: 'audio:transcribe'; audioDataUrl: string; mimeType: string; fileName: string }
   | { kind: 'audio:record-start' }
   | { kind: 'audio:record-stop' }
+  | { kind: 'audio:record-stop-raw' }
+  | { kind: 'audio:record-pause' }
+  | { kind: 'audio:record-resume' }
   | { kind: 'audio:record-cancel' }
+  | { kind: 'recording:session-start'; sessionId: string; startedAt: number }
+  | { kind: 'recording:session-stop'; sessionId: string }
+  | { kind: 'recording:finalize'; sessionId: string }
+  | { kind: 'git:status' }
   | { kind: 'pins:for-tab'; tabId?: number }
   | { kind: 'pin:focus'; tabId: number; annotationId: string }
   | { kind: 'pin:edit'; tabId: number; annotationId: string }
@@ -73,8 +80,24 @@ export type AnnotationAddResp = Resp<{
   files: { relativePath: string; bytes: number }[];
 }>;
 export type CaptureResp = Resp<{ dataUrl: string }>;
-export type TranscriptionResp = Resp<{ text: string; provider: string; model: string }>;
+export interface TranscriptResult {
+  text: string;
+  provider: string;
+  model: string;
+}
+
+export interface RecordedAudioResult extends Partial<TranscriptResult> {
+  audioDataUrl?: string;
+  mimeType?: string;
+  fileName?: string;
+  discarded?: boolean;
+  transcriptionError?: string;
+}
+
+export type TranscriptionResp = Resp<TranscriptResult | RecordedAudioResult>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
+export type RecordingSaveResp = Resp<{ files: { relativePath: string; bytes: number }[] }>;
+export type GitStatusResp = Resp<{ available: boolean; message: string }>;
 
 export type TabCommand =
   | { kind: 'picker:toggle'; mode?: 'sticky' | 'oneShot' }
@@ -84,6 +107,7 @@ export type TabCommand =
   | { kind: 'annotate:context' }
   | { kind: 'pin:focus'; annotationId: string }
   | { kind: 'pin:edit'; annotationId: string }
+  | { kind: 'pins:set-visible'; visible: boolean }
   | { kind: 'pins:update' }
   | { kind: 'picker:needs-session' };
 

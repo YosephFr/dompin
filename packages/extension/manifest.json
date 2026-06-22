@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DOMPin",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Pin elements on any web page and save them to a folder ready for your AI coding agent.",
   "permissions": [
     "activeTab",
@@ -12,7 +12,8 @@
     "contextMenus",
     "sidePanel",
     "offscreen",
-    "webRequest"
+    "webRequest",
+    "nativeMessaging"
   ],
   "host_permissions": ["<all_urls>"],
   "icons": {

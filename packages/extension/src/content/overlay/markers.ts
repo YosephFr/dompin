@@ -21,6 +21,7 @@ export class MarkerManager {
   private provisionalKind: 'element' | 'region' = 'element';
   private currentView = location.href;
   private hoveredId: string | null = null;
+  private visible = true;
 
   constructor(
     private layer: HTMLElement,
@@ -32,6 +33,17 @@ export class MarkerManager {
 
   count(): number {
     return this.markers.size;
+  }
+
+  isVisible(): boolean {
+    return this.visible;
+  }
+
+  setVisible(visible: boolean): void {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    if (!visible) this.hoveredId = null;
+    this.scheduleRender();
   }
 
   /**
@@ -158,6 +170,7 @@ export class MarkerManager {
       entry.box.remove();
     }
     this.markers.clear();
+    this.hideProvisional();
     if (this.rafId != null) cancelAnimationFrame(this.rafId);
   }
 
@@ -177,6 +190,11 @@ export class MarkerManager {
     for (const p of this.pending) {
       const entry = this.markers.get(p.id);
       if (!entry) continue;
+      if (!this.visible) {
+        entry.el.style.display = 'none';
+        entry.box.style.display = 'none';
+        continue;
+      }
       const rect = sameView(p.url, this.currentView) ? this.resolveRect(p) : null;
       if (!rect) {
         entry.el.style.display = 'none';

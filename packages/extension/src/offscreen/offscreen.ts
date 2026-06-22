@@ -9,7 +9,7 @@
  * the recorded audio back as a data URL.
  */
 
-type OffscreenCommand = 'start' | 'stop' | 'cancel';
+type OffscreenCommand = 'start' | 'stop' | 'pause' | 'resume' | 'cancel';
 
 interface OffscreenMessage {
   target: 'dompin-offscreen';
@@ -39,6 +39,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'stop':
       finishRecording(false, sendResponse);
       return true;
+    case 'pause':
+      sendResponse(pauseRecording());
+      return false;
+    case 'resume':
+      sendResponse(resumeRecording());
+      return false;
     case 'cancel':
       finishRecording(true, sendResponse);
       return true;
@@ -87,6 +93,22 @@ function finishRecording(discard: boolean, respond: (r: StopResult) => void): vo
   }
   pendingStop = { respond, discard };
   recorder.stop();
+}
+
+function pauseRecording(): { ok: true } | { ok: false; error: string } {
+  if (!recorder || recorder.state !== 'recording') {
+    return { ok: false, error: 'Recorder is not recording.' };
+  }
+  recorder.pause();
+  return { ok: true };
+}
+
+function resumeRecording(): { ok: true } | { ok: false; error: string } {
+  if (!recorder || recorder.state !== 'paused') {
+    return { ok: false, error: 'Recorder is not paused.' };
+  }
+  recorder.resume();
+  return { ok: true };
 }
 
 function handleRecorderStop(): void {
