@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] — 2026-06-27
+
+### Added
+
+- **Debug capture now maps actions to API calls.** Debug sessions record clicks, form actions, and views as structured events, then link nearby network requests back to the action that triggered them.
+
+### Changed
+
+- **Chrome tab sessions are isolated.** Starting, resuming, or ending a session in one tab no longer steals or archives active sessions in other tabs.
+- **Screen recording is a single global capture.** Other tabs show which session is recording without appearing to record themselves.
+- **Debug screenshots are opt-in.** Network debugging defaults to structured action/request mapping instead of automatic screenshot capture.
+
 ## [0.5.7] — 2026-06-22
 
 ### Fixed
