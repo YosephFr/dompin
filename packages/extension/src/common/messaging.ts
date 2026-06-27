@@ -2,6 +2,7 @@ import type {
   AnnotationAttachment,
   DebugCaptureStatus,
   DebugContentEvent,
+  RecordingSessionStatus,
   RecordingFrameMark,
   AnnotationPayload,
   PinForPage,
@@ -35,7 +36,7 @@ export type RequestMessage =
       pageUrl: string;
       pageTitle?: string | null;
     }
-  | { kind: 'session:archive'; sessionId: string }
+  | { kind: 'session:archive'; sessionId: string; tabId?: number }
   | { kind: 'annotation:add'; payload: AnnotationPayload }
   | { kind: 'annotation:cancel'; annotationId: string }
   | { kind: 'annotation:edit-comment'; annotationId: string; comment: string }
@@ -60,6 +61,7 @@ export type RequestMessage =
   | { kind: 'recording:session-pause'; sessionId: string }
   | { kind: 'recording:session-resume'; sessionId: string }
   | { kind: 'recording:session-stop'; sessionId: string }
+  | { kind: 'recording:status' }
   | { kind: 'recording:frame-mark'; mark: RecordingFrameMark }
   | { kind: 'recording:frame-marks'; sessionId: string }
   | { kind: 'recording:finalize'; sessionId: string }
@@ -108,6 +110,7 @@ export interface RecordedAudioResult extends Partial<TranscriptResult> {
 export type TranscriptionResp = Resp<TranscriptResult | RecordedAudioResult>;
 export type PinsForPageResp = Resp<{ pins: PinForPage[] }>;
 export type RecordingSaveResp = Resp<{ files: { relativePath: string; bytes: number }[] }>;
+export type RecordingStatusResp = Resp<{ status: RecordingSessionStatus }>;
 export type RecordingFrameMarksResp = Resp<{ marks: RecordingFrameMark[] }>;
 export type GitStatusResp = Resp<{ available: boolean; message: string }>;
 export type DebugStatusResp = Resp<{ status: DebugCaptureStatus }>;

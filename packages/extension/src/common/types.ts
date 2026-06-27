@@ -162,7 +162,26 @@ export interface DebugContentClickEvent {
   target: DebugClickTarget | null;
 }
 
-export type DebugContentEvent = DebugContentViewEvent | DebugContentClickEvent;
+export interface DebugInputInfo {
+  inputType: string | null;
+  valueLength: number | null;
+  checked: boolean | null;
+  selectedIndex: number | null;
+  selectedTextPreview: string | null;
+}
+
+export interface DebugContentFormEvent {
+  type: 'input' | 'change' | 'submit';
+  timestamp: number;
+  page: PageContext;
+  target: DebugClickTarget | null;
+  input: DebugInputInfo | null;
+}
+
+export type DebugContentEvent =
+  | DebugContentViewEvent
+  | DebugContentClickEvent
+  | DebugContentFormEvent;
 
 export type RecordingFrameMarkSource = 'page-click' | 'global-command';
 
@@ -176,6 +195,16 @@ export interface RecordingFrameMark {
   page: PageContext | null;
   pointer: DebugContentClickEvent['pointer'] | null;
   target: DebugClickTarget | null;
+}
+
+export interface RecordingSessionStatus {
+  active: boolean;
+  sessionId: string | null;
+  sessionName: string | null;
+  startedAt: number | null;
+  elapsedMs: number;
+  paused: boolean;
+  markCount: number;
 }
 
 export interface DebugCaptureStatus {

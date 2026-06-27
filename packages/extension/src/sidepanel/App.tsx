@@ -438,7 +438,11 @@ function AppInner({ onLocaleResolve }: { onLocaleResolve: (l: 'en' | 'es') => vo
     setBusy('archive');
     setError(null);
     try {
-      const r = await sendRequest({ kind: 'session:archive', sessionId: activeSession.id });
+      const r = await sendRequest({
+        kind: 'session:archive',
+        sessionId: activeSession.id,
+        ...(originRef.current.tabId == null ? {} : { tabId: originRef.current.tabId }),
+      });
       if (r.ok) {
         await stopPickerForTab();
         setActiveSession(null);

@@ -2,6 +2,7 @@ import type {
   DebugClickTarget,
   DebugCaptureStatus,
   DebugContentEvent,
+  DebugInputInfo,
   Session,
   WrittenFile,
 } from '../common/types.js';
@@ -17,6 +18,10 @@ const log = createLogger('debug-session');
 const SCREENSHOT_DELAY_MS = 900;
 const SCREENSHOT_MIN_INTERVAL_MS = 1500;
 const CLICK_SCREENSHOT_PADDING = 100;
+const ACTION_REQUEST_LOOKBACK_MS = 500;
+const ACTION_REQUEST_LOOKAHEAD_MS = 8000;
+const VIEW_REQUEST_LOOKBACK_MS = 2000;
+const VIEW_REQUEST_LOOKAHEAD_MS = 10000;
 const BODY_TEXT_LIMIT = 10_000_000;
 const REQUEST_POST_DATA_LIMIT = 10_000_000;
 
@@ -24,7 +29,7 @@ type DebuggerTarget = chrome.debugger.Debuggee;
 
 interface DebugRuntimeEvent {
   id: number;
-  type: 'click' | 'view';
+  type: DebugContentEvent['type'];
   timestamp: number;
   elapsedMs: number;
   screenshot: string | null;
@@ -44,6 +49,14 @@ interface DebugRelatedRequest {
   durationMs: number | null;
 }
 
+interface DebugRelatedEvent {
+  id: number;
+  file: string;
+  type: DebugContentEvent['type'];
+  label: string;
+  elapsedMs: number;
+}
+
 interface DebugRequestRecord {
   id: number;
   requestId: string;
@@ -59,6 +72,7 @@ interface DebugRequestRecord {
   responseBodyPath?: string;
   responseBodyError?: string;
   filePath?: string;
+  initiatorEvent?: DebugRelatedEvent | null;
 }
 
 interface DebugSessionState {
@@ -229,6 +243,7 @@ async function doStopDebugSession(
     await serialize(state, async () => {
       await writeOpenRequests(state);
       await rewriteDebugEvents(state);
+      await rewriteNetworkRecords(state);
       await writeSessionSummary(state);
       await writeDebugReadme(state);
     });
@@ -567,20 +582,19 @@ async function captureDebugScreenshot(
   state: DebugSessionState,
   item: DebugRuntimeEvent,
 ): Promise<string> {
-  const dataUrl =
-    item.content.type === 'click' && item.content.target
-      ? await captureElementImage(
-          state.tabId,
-          item.content.target.boundingRect,
-          item.page.viewport.devicePixelRatio,
-          CLICK_SCREENSHOT_PADDING,
-        )
-      : await captureViewport(state.tabId);
+  const target = debugEventTarget(item.content);
+  const dataUrl = target
+    ? await captureElementImage(
+        state.tabId,
+        target.boundingRect,
+        item.page.viewport.devicePixelRatio,
+        CLICK_SCREENSHOT_PADDING,
+      )
+    : await captureViewport(state.tabId);
   const dirs = await getDebugDirs(state.session);
   const name = `${seqName(item.id)}-${item.type}.png`;
   await writeDataUrl(dirs.screenshots, name, dataUrl);
-  item.screenshotKind =
-    item.content.type === 'click' && item.content.target ? 'element' : 'viewport';
+  item.screenshotKind = target ? 'element' : 'viewport';
   return `./screenshots/${name}`;
 }
 
@@ -601,6 +615,7 @@ async function writeNetworkRecord(
   const dirs = await getDebugDirs(state.session);
   const name = `${networkFileBase(record)}.json`;
   record.filePath = `./network/${name}`;
+  record.initiatorEvent = initiatorEventForRequest(state, record);
   await writeJson(dirs.network, name, {
     sessionId: state.session.id,
     sessionName: state.session.name,
@@ -652,7 +667,7 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
   lines.push(
     `- Duplicate request filter: ${state.settings.dedupeRequests ? 'enabled' : 'disabled'}`,
   );
-  lines.push(`- View/click events: ${state.eventSeq}`);
+  lines.push(`- Action events: ${state.eventSeq}`);
   lines.push(`- Completed network requests: ${state.networkCount}`);
   lines.push(`- Console entries: ${state.consoleCount}`);
   if (state.lastError) lines.push(`- Last error: ${state.lastError}`);
@@ -661,7 +676,7 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
   lines.push('');
   lines.push('- [Session summary](./session.json)');
   lines.push('- [Events](./events/)');
-  lines.push('- [Screenshots](./screenshots/)');
+  if (state.settings.captureScreenshots) lines.push('- [Screenshots](./screenshots/)');
   lines.push('- [Network](./network/)');
   lines.push('- [Console](./console/)');
   if (events.length) {
@@ -673,10 +688,8 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
       const screenshot = item.screenshot
         ? ` · [${item.screenshotKind === 'element' ? 'element crop' : 'viewport'}](${item.screenshot})`
         : '';
-      const target =
-        item.content.type === 'click' ? ` · ${targetPreview(item.content.target)}` : '';
       lines.push(
-        `- ${formatClock(item.elapsedMs)} · ${item.type} · [event](${eventFile})${screenshot}${target}`,
+        `- ${formatClock(item.elapsedMs)} · ${actionLabel(item)} · [event](${eventFile})${screenshot}`,
       );
       lines.push(`  Page: ${item.page.title || '(untitled)'} · ${item.page.url}`);
       if (item.relatedRequests.length) {
@@ -709,6 +722,12 @@ async function writeDebugReadme(state: DebugSessionState): Promise<void> {
 async function rewriteDebugEvents(state: DebugSessionState): Promise<void> {
   for (const item of state.events.values()) {
     await writeDebugEvent(state, item);
+  }
+}
+
+async function rewriteNetworkRecords(state: DebugSessionState): Promise<void> {
+  for (const record of state.completedRequests) {
+    await writeNetworkRecord(state, record);
   }
 }
 
@@ -883,8 +902,14 @@ function relatedRequestsForEvent(
   state: DebugSessionState,
   item: DebugRuntimeEvent,
 ): DebugRelatedRequest[] {
-  const startsAt = item.timestamp - 1000;
-  const endsAt = item.timestamp + 5000;
+  const startsAt =
+    item.type === 'view'
+      ? item.timestamp - VIEW_REQUEST_LOOKBACK_MS
+      : item.timestamp - ACTION_REQUEST_LOOKBACK_MS;
+  const endsAt =
+    item.type === 'view'
+      ? item.timestamp + VIEW_REQUEST_LOOKAHEAD_MS
+      : item.timestamp + ACTION_REQUEST_LOOKAHEAD_MS;
   return state.completedRequests
     .filter((record) => record.startedAt >= startsAt && record.startedAt <= endsAt)
     .slice(0, 12)
@@ -897,6 +922,61 @@ function relatedRequestsForEvent(
       elapsedMs: record.elapsedMs,
       durationMs: typeof record.durationMs === 'number' ? record.durationMs : null,
     }));
+}
+
+function initiatorEventForRequest(
+  state: DebugSessionState,
+  record: DebugRequestRecord,
+): DebugRelatedEvent | null {
+  let best: DebugRuntimeEvent | null = null;
+  for (const item of state.events.values()) {
+    const startsAt =
+      item.type === 'view'
+        ? item.timestamp - VIEW_REQUEST_LOOKBACK_MS
+        : item.timestamp - ACTION_REQUEST_LOOKBACK_MS;
+    const endsAt =
+      item.type === 'view'
+        ? item.timestamp + VIEW_REQUEST_LOOKAHEAD_MS
+        : item.timestamp + ACTION_REQUEST_LOOKAHEAD_MS;
+    if (record.startedAt < startsAt || record.startedAt > endsAt) continue;
+    if (!best || item.timestamp > best.timestamp) best = item;
+  }
+  return best
+    ? {
+        id: best.id,
+        file: eventFile(best),
+        type: best.type,
+        label: actionLabel(best),
+        elapsedMs: best.elapsedMs,
+      }
+    : null;
+}
+
+function eventFile(item: DebugRuntimeEvent): string {
+  return `./events/${seqName(item.id)}-${item.type}.json`;
+}
+
+function actionLabel(item: DebugRuntimeEvent): string {
+  if (item.content.type === 'view') return `view ${item.content.trigger}`;
+  const target = targetPreview(debugEventTarget(item.content));
+  if (item.content.type === 'click') return `click · ${target}`;
+  const input = item.content.input ? ` · ${inputLabel(item.content.input)}` : '';
+  return `${item.content.type}${input} · ${target}`;
+}
+
+function inputLabel(input: DebugInputInfo): string {
+  const parts = [
+    input.inputType,
+    typeof input.valueLength === 'number' ? `${input.valueLength} chars` : null,
+    typeof input.checked === 'boolean' ? `checked=${input.checked}` : null,
+    typeof input.selectedIndex === 'number' ? `selected=${input.selectedIndex}` : null,
+    input.selectedTextPreview ? `"${input.selectedTextPreview}"` : null,
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
+
+function debugEventTarget(event: DebugContentEvent): DebugClickTarget | null {
+  return event.type === 'view' ? null : event.target;
 }
 
 function requestLink(request: DebugRelatedRequest): string {
@@ -915,6 +995,9 @@ function requestSummary(record: DebugRequestRecord): string {
   if (typeof record.durationMs === 'number') parts.push(`${record.durationMs}ms`);
   if (record.requestBodyPath) parts.push(`[request body](${record.requestBodyPath})`);
   if (record.responseBodyPath) parts.push(`[response body](${record.responseBodyPath})`);
+  if (record.initiatorEvent) {
+    parts.push(`action: [${record.initiatorEvent.label}](${record.initiatorEvent.file})`);
+  }
   if (record.error) parts.push(`error: ${record.error}`);
   return parts.join(' · ');
 }

@@ -880,6 +880,10 @@ body {
   border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
 }
 
+.hero-recording.is-locked {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+}
+
 .hero-debug.is-on {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: linear-gradient(
@@ -1040,6 +1044,11 @@ body {
 .hero-recording.is-paused .recording-dot {
   background: var(--warn);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 20%, transparent);
+}
+
+.hero-recording.is-locked .recording-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .recording-time {

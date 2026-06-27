@@ -53,6 +53,9 @@ export const es: Strings = {
     hint: 'Captura video y micrófono. Marcá frames con el atajo global de Chrome: ⌘+Shift+1 en Mac o Ctrl+Shift+1 en Win/Linux.',
     frameMarks: (n: number) =>
       `${n} frame${n === 1 ? '' : 's'} marcado${n === 1 ? '' : 's'} con atajo.`,
+    activeSession: (name: string) => `Grabando: ${name || 'sesión activa'}`,
+    activeSessionHint: (name: string) =>
+      `${name || 'Otra sesión'} está usando la grabación de pantalla.`,
     saved: 'Grabación guardada en esta sesión.',
     pending: 'Hay una grabación guardada que falta procesar.',
     retry: 'Reintentar',
@@ -64,7 +67,7 @@ export const es: Strings = {
     start: 'Iniciar depuración',
     stop: 'Detener depuración',
     working: 'Procesando…',
-    hint: 'Captura APIs externas, clics y vistas. La consola y el modo agresivo viven en ajustes.',
+    hint: 'Mapea APIs externas con clics, formularios y vistas. La consola y el modo agresivo viven en ajustes.',
     statsLabel: 'Contadores de depuración',
     events: ' eventos',
     network: ' red',
@@ -162,7 +165,7 @@ export const es: Strings = {
       'Los checkpoints Git requieren instalar una vez el companion local. Después cada anotación y edición queda versionada dentro de la sesión.',
     step8Title: 'Usá depuración para investigar problemas técnicos',
     step8Tip:
-      'Iniciá Depuración cuando necesites guardar clics, cambios de vista, screenshots y payloads de APIs externas. La consola y el modo agresivo se activan desde ajustes.',
+      'Iniciá Depuración cuando necesites mapear clics, cambios de formulario, vistas y payloads de APIs externas. La consola y el modo agresivo se activan desde ajustes.',
   },
   reconnect: {
     message: 'El acceso a la carpeta expiró. Reconectá para continuar.',

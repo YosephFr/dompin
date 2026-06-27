@@ -19,8 +19,8 @@ DOMPin is a Chrome extension that lets you click any element or drag a custom re
    narration, and lets you mark exact video frames with Chrome's global `Command+Shift+1` shortcut
    on Mac or `Ctrl+Shift+1` on Win/Linux, even when another app is focused.
 7. For technical investigations, use **Debug capture**. The default mode records external API calls,
-   clicks, view changes, full-view screenshots for navigation, and padded element crops for clicks;
-   aggressive same-origin capture and console capture are optional settings.
+   clicks, form actions, and view changes, then links each action to the network calls around it;
+   screenshots, aggressive same-origin capture, and console capture are optional settings.
 8. Open the vault folder in your editor and let your AI agent work from it.
 
 ## File layout

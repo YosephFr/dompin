@@ -41,6 +41,7 @@ import { snapshotNetworkFailures } from './network-failures.js';
 import { checkGitHelper, commitSessionSnapshot, type GitCommitResult } from './git-helper.js';
 import {
   addRecordingFrameMark,
+  getRecordingStatus,
   pauseSessionRecording,
   annotationRecordingContext,
   clearSessionRecording,
@@ -147,7 +148,7 @@ async function handle(
       return ok({ session });
     }
     case 'session:archive': {
-      await archiveSession(req.sessionId);
+      await archiveSession(req.sessionId, req.tabId);
       return ok({});
     }
     case 'annotation:add': {
@@ -337,20 +338,25 @@ async function handle(
       return ok({});
     }
     case 'recording:session-start': {
-      startSessionRecording(req.sessionId, req.startedAt);
-      return ok({});
+      const session = await getSessionRecord(req.sessionId);
+      if (!session) return err('Session not found');
+      const result = startSessionRecording(session, req.startedAt);
+      return result.ok ? ok({ status: result.status }) : err(result.error);
     }
     case 'recording:session-pause': {
       pauseSessionRecording(req.sessionId);
-      return ok({});
+      return ok({ status: getRecordingStatus() });
     }
     case 'recording:session-resume': {
       resumeSessionRecording(req.sessionId);
-      return ok({});
+      return ok({ status: getRecordingStatus() });
     }
     case 'recording:session-stop': {
       stopSessionRecording(req.sessionId);
-      return ok({});
+      return ok({ status: getRecordingStatus() });
+    }
+    case 'recording:status': {
+      return ok({ status: getRecordingStatus() });
     }
     case 'recording:frame-mark': {
       return ok({ marks: addRecordingFrameMark(req.mark) });

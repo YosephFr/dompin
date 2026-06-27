@@ -119,16 +119,11 @@ export async function resumeSession(
 
   const tabKey = String(tabId);
   const prevId = store.active[tabKey];
-  if (prevId && prevId !== sessionId && store.sessions[prevId]) {
-    store.sessions[prevId].status = 'archived';
-  }
-  for (const [key, sid] of Object.entries(store.active)) {
-    if (sid === sessionId && key !== tabKey) delete store.active[key];
-  }
   rec.status = 'active';
   if (pageUrl) rec.pageUrl = pageUrl;
   if (pageTitle) rec.pageTitle = pageTitle;
   store.active[tabKey] = sessionId;
+  if (prevId && prevId !== sessionId) updateSessionStatus(store, prevId);
   await persist();
   notify(tabId);
   return toSession(rec);
@@ -142,9 +137,6 @@ async function createSession(
 ): Promise<Session> {
   const store = await loadStore();
   const prevId = store.active[String(tabId)];
-  if (prevId && store.sessions[prevId]) {
-    store.sessions[prevId].status = 'archived';
-  }
   const sessionName = name?.trim() || defaultSessionName(pageUrl);
   const safeName = sanitizeSegment(sessionName, 'session');
   const domain = readDomain(pageUrl);
@@ -167,6 +159,7 @@ async function createSession(
   };
   store.sessions[id] = record;
   store.active[String(tabId)] = id;
+  if (prevId) updateSessionStatus(store, prevId);
   await persist();
   notify(tabId);
   return toSession(record);
@@ -184,16 +177,21 @@ export async function renameSession(sessionId: string, newName: string): Promise
   return toSession(rec);
 }
 
-export async function archiveSession(sessionId: string): Promise<void> {
+export async function archiveSession(sessionId: string, tabId?: number): Promise<void> {
   const store = await loadStore();
   const rec = store.sessions[sessionId];
   if (!rec) return;
-  rec.status = 'archived';
-  for (const [tabIdStr, sid] of Object.entries(store.active)) {
-    if (sid === sessionId) delete store.active[tabIdStr];
+  if (typeof tabId === 'number') {
+    const tabKey = String(tabId);
+    if (store.active[tabKey] === sessionId) delete store.active[tabKey];
+  } else {
+    for (const [tabIdStr, sid] of Object.entries(store.active)) {
+      if (sid === sessionId) delete store.active[tabIdStr];
+    }
   }
+  updateSessionStatus(store, sessionId);
   await persist();
-  notify(null);
+  notify(typeof tabId === 'number' ? tabId : null);
 }
 
 export async function listSessions(
@@ -285,10 +283,15 @@ async function onTabRemoved(tabId: number): Promise<void> {
   const sid = store.active[String(tabId)];
   if (!sid) return;
   delete store.active[String(tabId)];
-  const rec = store.sessions[sid];
-  if (rec) rec.status = 'archived';
+  updateSessionStatus(store, sid);
   await persist();
   notify(tabId);
+}
+
+function updateSessionStatus(store: SessionStore, sessionId: string): void {
+  const rec = store.sessions[sessionId];
+  if (!rec) return;
+  rec.status = Object.values(store.active).includes(sessionId) ? 'active' : 'archived';
 }
 
 function readDomain(pageUrl: string): string {

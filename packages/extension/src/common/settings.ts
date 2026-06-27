@@ -19,7 +19,7 @@ export interface DebugCaptureSettings {
 }
 
 export interface Settings {
-  schemaVersion: 4;
+  schemaVersion: 5;
   allowlist: string[];
   flags: {
     captureNetworkFailures: boolean;
@@ -44,7 +44,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   allowlist: ['*'],
   flags: {
     captureNetworkFailures: false,
@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   debug: {
     mode: 'soft',
     captureConsole: false,
-    captureScreenshots: true,
+    captureScreenshots: false,
     dedupeRequests: true,
   },
 };
@@ -91,7 +91,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
     mode: rawDebug.mode === 'aggressive' ? 'aggressive' : 'soft',
     captureConsole: Boolean(rawDebug.captureConsole),
     captureScreenshots:
-      typeof rawDebug.captureScreenshots === 'boolean'
+      incomingVersion >= 5 && typeof rawDebug.captureScreenshots === 'boolean'
         ? rawDebug.captureScreenshots
         : DEFAULT_SETTINGS.debug.captureScreenshots,
     dedupeRequests:
@@ -101,7 +101,7 @@ export function mergeSettings(partial: Partial<Settings> | undefined): Settings 
   };
   const allowlist =
     Array.isArray(p.allowlist) && p.allowlist.length > 0 ? p.allowlist : DEFAULT_SETTINGS.allowlist;
-  return { schemaVersion: 4, allowlist, flags, preferences, transcription, git, recording, debug };
+  return { schemaVersion: 5, allowlist, flags, preferences, transcription, git, recording, debug };
 }
 
 export function isOriginAllowed(url: string, allowlist: string[]): boolean {

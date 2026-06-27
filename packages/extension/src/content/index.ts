@@ -1,5 +1,6 @@
 import type {
   DebugClickTarget,
+  DebugInputInfo,
   RectInfo,
   PinForPage,
   RecordingFrameMark,
@@ -52,6 +53,8 @@ class ContentApp {
   private stopping = false;
   private debugCaptureActive = false;
   private debugHighlightTimer: number | null = null;
+  private debugFormTimers = new WeakMap<Element, number>();
+  private debugFormTimerIds = new Set<number>();
   private recordingFrameCaptureActive = false;
   private recordingFrameStartedAt = 0;
   private recordingFrameSessionId: string | null = null;
@@ -236,6 +239,9 @@ class ContentApp {
     if (!this.debugCaptureActive) {
       this.debugCaptureActive = true;
       document.addEventListener('click', this.handleDebugClick, true);
+      document.addEventListener('input', this.handleDebugInput, true);
+      document.addEventListener('change', this.handleDebugChange, true);
+      document.addEventListener('submit', this.handleDebugSubmit, true);
     }
     this.sendDebugView('start', null);
   }
@@ -244,6 +250,10 @@ class ContentApp {
     if (!this.debugCaptureActive) return;
     this.debugCaptureActive = false;
     document.removeEventListener('click', this.handleDebugClick, true);
+    document.removeEventListener('input', this.handleDebugInput, true);
+    document.removeEventListener('change', this.handleDebugChange, true);
+    document.removeEventListener('submit', this.handleDebugSubmit, true);
+    this.clearDebugFormTimers();
     if (this.debugHighlightTimer != null) window.clearTimeout(this.debugHighlightTimer);
     this.debugHighlightTimer = null;
     this.highlight.hide();
@@ -292,6 +302,58 @@ class ContentApp {
     };
     void sendRequest(payload);
   };
+
+  private handleDebugInput = (ev: Event): void => {
+    if (!this.debugCaptureActive) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target || this.isOurDom(target)) return;
+    const existing = this.debugFormTimers.get(target);
+    if (existing != null) {
+      window.clearTimeout(existing);
+      this.debugFormTimerIds.delete(existing);
+    }
+    const timer = window.setTimeout(() => {
+      this.debugFormTimerIds.delete(timer);
+      this.debugFormTimers.delete(target);
+      this.sendDebugFormEvent('input', target);
+    }, 450);
+    this.debugFormTimers.set(target, timer);
+    this.debugFormTimerIds.add(timer);
+  };
+
+  private handleDebugChange = (ev: Event): void => {
+    if (!this.debugCaptureActive) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target || this.isOurDom(target)) return;
+    this.sendDebugFormEvent('change', target);
+  };
+
+  private handleDebugSubmit = (ev: Event): void => {
+    if (!this.debugCaptureActive) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target || this.isOurDom(target)) return;
+    this.sendDebugFormEvent('submit', target);
+  };
+
+  private sendDebugFormEvent(type: 'input' | 'change' | 'submit', target: Element): void {
+    if (!this.debugCaptureActive || this.isOurDom(target)) return;
+    void sendRequest({
+      kind: 'debug:event',
+      event: {
+        type,
+        timestamp: Date.now(),
+        page: capturePage(),
+        target: this.captureDebugTarget(target),
+        input: this.captureDebugInput(target),
+      },
+    });
+  }
+
+  private clearDebugFormTimers(): void {
+    for (const timer of this.debugFormTimerIds) window.clearTimeout(timer);
+    this.debugFormTimerIds.clear();
+    this.debugFormTimers = new WeakMap<Element, number>();
+  }
 
   private flashDebugTarget(el: Element): void {
     this.highlight.show(el);
@@ -382,6 +444,59 @@ class ContentApp {
         boundingRect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
       };
     }
+  }
+
+  private captureDebugInput(el: Element): DebugInputInfo | null {
+    if (el instanceof HTMLInputElement) {
+      return {
+        inputType: el.type || 'text',
+        valueLength: valueLengthForInput(el),
+        checked: ['checkbox', 'radio'].includes(el.type) ? el.checked : null,
+        selectedIndex: null,
+        selectedTextPreview: null,
+      };
+    }
+    if (el instanceof HTMLTextAreaElement) {
+      return {
+        inputType: 'textarea',
+        valueLength: el.value.length,
+        checked: null,
+        selectedIndex: null,
+        selectedTextPreview: null,
+      };
+    }
+    if (el instanceof HTMLSelectElement) {
+      return {
+        inputType: el.multiple ? 'select-multiple' : 'select-one',
+        valueLength: null,
+        checked: null,
+        selectedIndex: el.selectedIndex,
+        selectedTextPreview: Array.from(el.selectedOptions)
+          .map((option) => (option.textContent ?? '').replace(/\s+/g, ' ').trim())
+          .filter(Boolean)
+          .join(', ')
+          .slice(0, 160),
+      };
+    }
+    if (el instanceof HTMLFormElement) {
+      return {
+        inputType: 'form',
+        valueLength: null,
+        checked: null,
+        selectedIndex: null,
+        selectedTextPreview: null,
+      };
+    }
+    if (el instanceof HTMLElement && el.isContentEditable) {
+      return {
+        inputType: 'contenteditable',
+        valueLength: (el.textContent ?? '').length,
+        checked: null,
+        selectedIndex: null,
+        selectedTextPreview: null,
+      };
+    }
+    return null;
   }
 
   private handleMarkerClick(id: string, ev: MouseEvent): void {
@@ -662,6 +777,12 @@ function safeSelector(el: Element): string | null {
   } catch {
     return null;
   }
+}
+
+function valueLengthForInput(el: HTMLInputElement): number | null {
+  if (['password', 'hidden', 'file'].includes(el.type)) return null;
+  if (['checkbox', 'radio'].includes(el.type)) return null;
+  return el.value.length;
 }
 
 function randomId(): string {

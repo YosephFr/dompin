@@ -498,8 +498,9 @@ export function App(): JSX.Element {
           <h2>Debug capture</h2>
         </div>
         <p className="section-hint">
-          The default mode records external API calls, view changes, and clicks without same-site
-          request noise. Use aggressive mode only when you need a complete browser-level trace.
+          The default mode records external API calls, view changes, clicks, and form actions
+          without same-site request noise. Use aggressive mode only when you need a complete
+          browser-level trace.
         </p>
         <label className="toggle">
           <span className="toggle-text">
@@ -539,9 +540,9 @@ export function App(): JSX.Element {
         </label>
         <label className="toggle">
           <span className="toggle-text">
-            <span className="toggle-label">Save click and view screenshots</span>
+            <span className="toggle-label">Save debug screenshots</span>
             <span className="toggle-description">
-              Adds screenshots to the debug timeline and links nearby network calls in the brief.
+              Adds optional images to the action timeline while keeping request mapping structured.
             </span>
           </span>
           <input

@@ -1,6 +1,12 @@
-import type { AnnotationRecordingContext, RecordingFrameMark } from '../common/types.js';
+import type {
+  AnnotationRecordingContext,
+  RecordingFrameMark,
+  RecordingSessionStatus,
+  Session,
+} from '../common/types.js';
 
 interface SessionRecordingState {
+  sessionName: string;
   startedAt: number;
   active: boolean;
   paused: boolean;
@@ -11,8 +17,23 @@ interface SessionRecordingState {
 
 const sessions = new Map<string, SessionRecordingState>();
 
-export function startSessionRecording(sessionId: string, startedAt: number): void {
-  sessions.set(sessionId, {
+export function startSessionRecording(
+  session: Session,
+  startedAt: number,
+):
+  | { ok: true; status: RecordingSessionStatus }
+  | { ok: false; error: string; status: RecordingSessionStatus } {
+  const current = currentRecordingSession();
+  if (current) {
+    const status = statusFor(current.sessionId, current.state);
+    return {
+      ok: false,
+      error: `Screen recording is already running for ${current.state.sessionName}.`,
+      status,
+    };
+  }
+  sessions.set(session.id, {
+    sessionName: session.name,
     startedAt,
     active: true,
     paused: false,
@@ -20,6 +41,7 @@ export function startSessionRecording(sessionId: string, startedAt: number): voi
     pausedMs: 0,
     marks: [],
   });
+  return { ok: true, status: getRecordingStatus() };
 }
 
 export function stopSessionRecording(sessionId: string): void {
@@ -64,7 +86,7 @@ export function addRecordingFrameMark(mark: RecordingFrameMark): RecordingFrameM
 }
 
 export function addGlobalRecordingFrameMark(): RecordingFrameMark | null {
-  const session = activeRecordingSession();
+  const session = currentRecordingSession(false);
   if (!session) return null;
   const timestamp = Date.now();
   const mark: RecordingFrameMark = {
@@ -72,14 +94,19 @@ export function addGlobalRecordingFrameMark(): RecordingFrameMark | null {
     sessionId: session.sessionId,
     source: 'global-command',
     timestamp,
-    startedAt: session.startedAt,
-    elapsedMs: elapsedMsFor(session, timestamp),
+    startedAt: session.state.startedAt,
+    elapsedMs: elapsedMsFor(session.state, timestamp),
     page: null,
     pointer: null,
     target: null,
   };
   addRecordingFrameMark(mark);
   return mark;
+}
+
+export function getRecordingStatus(): RecordingSessionStatus {
+  const current = currentRecordingSession();
+  return current ? statusFor(current.sessionId, current.state) : inactiveStatus();
 }
 
 export function recordingFrameMarks(sessionId: string): RecordingFrameMark[] {
@@ -97,15 +124,43 @@ export function annotationRecordingContext(sessionId: string): AnnotationRecordi
   };
 }
 
-function activeRecordingSession(): (SessionRecordingState & { sessionId: string }) | null {
-  let active: (SessionRecordingState & { sessionId: string }) | null = null;
+function currentRecordingSession(
+  includePaused = true,
+): { sessionId: string; state: SessionRecordingState } | null {
+  let current: { sessionId: string; state: SessionRecordingState } | null = null;
   for (const [sessionId, state] of sessions) {
-    if (!state.active || state.paused) continue;
-    if (!active || state.startedAt > active.startedAt) {
-      active = { ...state, sessionId };
+    if (!state.active) continue;
+    if (!includePaused && state.paused) continue;
+    if (!current || state.startedAt > current.state.startedAt) {
+      current = { sessionId, state };
     }
   }
-  return active;
+  return current;
+}
+
+function statusFor(sessionId: string, state: SessionRecordingState): RecordingSessionStatus {
+  const now = Date.now();
+  return {
+    active: state.active,
+    sessionId,
+    sessionName: state.sessionName,
+    startedAt: state.startedAt,
+    elapsedMs: elapsedMsFor(state, now),
+    paused: state.paused,
+    markCount: state.marks.length,
+  };
+}
+
+function inactiveStatus(): RecordingSessionStatus {
+  return {
+    active: false,
+    sessionId: null,
+    sessionName: null,
+    startedAt: null,
+    elapsedMs: 0,
+    paused: false,
+    markCount: 0,
+  };
 }
 
 function elapsedMsFor(state: SessionRecordingState, timestamp: number): number {

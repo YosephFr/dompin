@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MutableRefObject,
+} from 'react';
 import { useT } from '../../common/i18n/index.js';
 import { sendRequest } from '../../common/messaging.js';
-import type { RecordingFrameMark, Session } from '../../common/types.js';
+import type { RecordingFrameMark, RecordingSessionStatus, Session } from '../../common/types.js';
 import { loadRootHandle, requestRootPermission } from '../../common/vault-handle.js';
 
 type RecordingState = 'idle' | 'recording' | 'paused' | 'stopping' | 'saving';
@@ -28,6 +35,16 @@ type ExtractedFrame = {
   mark: RecordingFrameMark;
 };
 
+const EMPTY_RECORDING_STATUS: RecordingSessionStatus = {
+  active: false,
+  sessionId: null,
+  sessionName: null,
+  startedAt: null,
+  elapsedMs: 0,
+  paused: false,
+  markCount: 0,
+};
+
 export function RecordingHero({
   session,
   tabId,
@@ -47,6 +64,7 @@ export function RecordingHero({
   const [pending, setPending] = useState<PendingRecording | null>(null);
   const [level, setLevel] = useState(0);
   const [frameMarkCount, setFrameMarkCount] = useState(0);
+  const [globalStatus, setGlobalStatus] = useState<RecordingSessionStatus>(EMPTY_RECORDING_STATUS);
   const displayStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const displayRecorderRef = useRef<MediaRecorder | null>(null);
@@ -62,6 +80,19 @@ export function RecordingHero({
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  const refreshGlobalStatus = useCallback(async (): Promise<void> => {
+    const resp = await sendRequest<{ status: RecordingSessionStatus }>({
+      kind: 'recording:status',
+    });
+    if (resp.ok) setGlobalStatus(resp.status);
+  }, []);
+
+  useEffect(() => {
+    void refreshGlobalStatus();
+    const timer = window.setInterval(() => void refreshGlobalStatus(), 1000);
+    return () => window.clearInterval(timer);
+  }, [refreshGlobalStatus, session.id]);
 
   useEffect(() => {
     void refreshPendingRecording();
@@ -90,10 +121,20 @@ export function RecordingHero({
     setAudioIssue(null);
     setLastSaved(null);
     setPending(null);
+    let lockStarted = false;
     try {
       if (!navigator.mediaDevices?.getDisplayMedia || !navigator.mediaDevices?.getUserMedia) {
         throw new Error('Screen or microphone capture is not available.');
       }
+      const startedAt = Date.now();
+      const lock = await sendRequest<{ status: RecordingSessionStatus }>({
+        kind: 'recording:session-start',
+        sessionId: session.id,
+        startedAt,
+      });
+      if (!lock.ok) throw new Error(lock.error);
+      lockStarted = true;
+      setGlobalStatus(lock.status);
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true,
@@ -108,7 +149,6 @@ export function RecordingHero({
 
       const video = prepareRecorder(displayStream, preferredVideoMimeType(), 'video/webm');
       const audio = prepareRecorder(micStream, preferredAudioMimeType(), 'audio/webm');
-      const startedAt = Date.now();
       displayStreamRef.current = displayStream;
       micStreamRef.current = micStream;
       displayRecorderRef.current = video.recorder;
@@ -123,7 +163,6 @@ export function RecordingHero({
       video.recorder.start(1000);
       audio.recorder.start(1000);
       startMeter(micStream);
-      await sendRequest({ kind: 'recording:session-start', sessionId: session.id, startedAt });
       await startFrameCaptureForTab(startedAt);
       onRecordingActiveChange?.(true);
       setElapsedMs(0);
@@ -131,6 +170,13 @@ export function RecordingHero({
       setState('recording');
       startTimer(timerRef, startedAt, setElapsedMs);
     } catch (e) {
+      if (lockStarted) {
+        const status = await sendRequest<{ status: RecordingSessionStatus }>({
+          kind: 'recording:session-stop',
+          sessionId: session.id,
+        });
+        if (status.ok) setGlobalStatus(status.status);
+      }
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
         onError(e instanceof Error ? e.message : String(e));
       }
@@ -142,7 +188,12 @@ export function RecordingHero({
     if (stateRef.current !== 'recording') return;
     pauseRecorder(displayRecorderRef.current);
     pauseRecorder(micRecorderRef.current);
-    void sendRequest({ kind: 'recording:session-pause', sessionId: session.id });
+    void sendRequest<{ status: RecordingSessionStatus }>({
+      kind: 'recording:session-pause',
+      sessionId: session.id,
+    }).then((resp) => {
+      if (resp.ok) setGlobalStatus(resp.status);
+    });
     void stopFrameCaptureForTab();
     clearTimer(timerRef);
     setLevel(0);
@@ -153,7 +204,12 @@ export function RecordingHero({
     if (stateRef.current !== 'paused') return;
     resumeRecorder(displayRecorderRef.current);
     resumeRecorder(micRecorderRef.current);
-    void sendRequest({ kind: 'recording:session-resume', sessionId: session.id });
+    void sendRequest<{ status: RecordingSessionStatus }>({
+      kind: 'recording:session-resume',
+      sessionId: session.id,
+    }).then((resp) => {
+      if (resp.ok) setGlobalStatus(resp.status);
+    });
     void startFrameCaptureForTab(startedAtRef.current);
     setState('recording');
     startTimer(timerRef, startedAtRef.current, setElapsedMs);
@@ -172,7 +228,11 @@ export function RecordingHero({
     const stoppedAt = Date.now();
     const durationMs = Math.max(0, stoppedAt - startedAtRef.current);
     await stopFrameCaptureForTab();
-    await sendRequest({ kind: 'recording:session-stop', sessionId: session.id });
+    const stopStatus = await sendRequest<{ status: RecordingSessionStatus }>({
+      kind: 'recording:session-stop',
+      sessionId: session.id,
+    });
+    if (stopStatus.ok) setGlobalStatus(stopStatus.status);
     stopRecorder(displayRecorder);
     stopRecorder(micRecorder);
     stopTracks(displayStreamRef.current);
@@ -511,24 +571,33 @@ export function RecordingHero({
   }
 
   const isBusy = state === 'stopping' || state === 'saving';
-  const label =
-    state === 'recording'
+  const lockedByAnotherSession = state === 'idle' && globalStatus.active;
+  const globalRecordingName = globalStatus.sessionName ?? '';
+  const label = lockedByAnotherSession
+    ? t.recording.activeSession(globalRecordingName)
+    : state === 'recording'
       ? t.recording.recording
       : state === 'paused'
         ? t.recording.paused
         : isBusy
           ? t.recording.saving
           : t.recording.idle;
+  const visualState = lockedByAnotherSession ? 'locked' : state;
+  const displayElapsedMs = lockedByAnotherSession ? globalStatus.elapsedMs : elapsedMs;
+  const visibleMarkCount =
+    state === 'idle' && globalStatus.sessionId === session.id
+      ? globalStatus.markCount
+      : frameMarkCount;
   const bars = meterBars(level);
 
   return (
-    <section className={`hero hero-recording is-${state}`}>
+    <section className={`hero hero-recording is-${visualState}`}>
       <div className="hero-row">
         <span className="recording-status">
           <span className="recording-dot" aria-hidden="true" />
           <span className="hero-label">{label}</span>
         </span>
-        <span className="recording-time">{formatElapsed(elapsedMs)}</span>
+        <span className="recording-time">{formatElapsed(displayElapsedMs)}</span>
       </div>
       <div
         className={`recording-meter ${state === 'recording' ? 'is-live' : ''}`}
@@ -544,7 +613,7 @@ export function RecordingHero({
             type="button"
             className="btn btn-primary"
             onClick={() => void start()}
-            disabled={Boolean(pending)}
+            disabled={Boolean(pending) || globalStatus.active}
           >
             {t.recording.start}
           </button>
@@ -582,9 +651,11 @@ export function RecordingHero({
       <p className="hero-hint">
         {audioIssue
           ? t.recording.audioIssue(audioIssue)
-          : frameMarkCount > 0
-            ? t.recording.frameMarks(frameMarkCount)
-            : t.recording.hint}
+          : lockedByAnotherSession
+            ? t.recording.activeSessionHint(globalRecordingName)
+            : visibleMarkCount > 0
+              ? t.recording.frameMarks(visibleMarkCount)
+              : t.recording.hint}
       </p>
       {lastSaved ? <p className="recording-saved">{lastSaved}</p> : null}
     </section>

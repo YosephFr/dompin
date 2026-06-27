@@ -239,33 +239,36 @@ debug/
   events/
     0001-view.json
     0002-click.json
-  screenshots/
-    0001-view.png
-    0002-click.png
+    0003-input.json
+    0004-submit.json
   network/
     0001-get-api-example-com-v1-status.json
     0001-get-api-example-com-v1-status.response.txt
   console/
     0001.json
+  screenshots/
+    0001-view.png
 ```
 
 - `session.json` contains capture timing, counts, active capture settings, paths, and the last
   capture error if any.
-- `events/` contains automatic `view` and `click` events with page context, click target metadata,
-  elapsed time, screenshot path, screenshot kind, and nearby related network request links. Click
-  targets include selector, XPath, text preview, outerHTML preview, bounding rect, computed style
-  groups, React info when available, and scroll ancestor data.
-- `screenshots/` contains viewport PNGs for view changes and padded element-crop PNGs for click
-  events when screenshot capture is enabled. Click crops include the DOMPin highlighted target and
-  about 100 CSS pixels of surrounding context.
+- `events/` contains automatic `view`, `click`, `input`, `change`, and `submit` events with page
+  context, target metadata, elapsed time, optional screenshot paths, and nearby related network
+  request links. Targets include selector, XPath, text preview, outerHTML preview, bounding rect,
+  computed style groups, React info when available, and scroll ancestor data. Form events store
+  control metadata such as input type, selected option text, checked state, and value length without
+  persisting typed text.
 - `network/` contains one JSON file per captured request plus request/response body sidecar files
   when Chrome exposes them through the debugger protocol. The default mode captures only external
-  API-like requests and skips duplicate method+URL pairs. Aggressive mode captures same-origin and
+  API-like requests and skips duplicate method+URL pairs. Each JSON file includes `initiatorEvent`
+  when the request falls inside an action window. Aggressive mode captures same-origin and
   browser-level request noise too.
 - `console/` contains console calls, browser log entries, and uncaught exception details only when
   console capture is enabled.
-- `debug/README.md` includes a timeline that links each click or view screenshot to network calls
-  that occurred around that moment.
+- `screenshots/` contains viewport PNGs for view changes and padded element-crop PNGs for action
+  targets only when screenshot capture is enabled.
+- `debug/README.md` includes a timeline that links each action to network calls that occurred around
+  that moment and lists the reverse action link beside each network request.
 
 Debug capture is separate from manual annotation ordinals: it does not create `NN.md` pin files and
 does not change the annotation count.

@@ -50,6 +50,8 @@ export const en = {
     stop: 'Stop',
     hint: 'Captures screen video and microphone. Mark frames with the Chrome global shortcut: Command+Shift+1 on Mac or Ctrl+Shift+1 on Win/Linux.',
     frameMarks: (n: number) => `${n} frame mark${n === 1 ? '' : 's'} saved with the shortcut.`,
+    activeSession: (name: string) => `Recording: ${name || 'active session'}`,
+    activeSessionHint: (name: string) => `${name || 'Another session'} is using screen recording.`,
     saved: 'Recording saved in this session.',
     pending: 'A saved recording still needs processing.',
     retry: 'Retry',
@@ -61,7 +63,7 @@ export const en = {
     start: 'Start debugging',
     stop: 'Stop debugging',
     working: 'Working…',
-    hint: 'Captures external APIs, clicks, and views. Console and aggressive mode live in settings.',
+    hint: 'Maps external APIs to clicks, form actions, and views. Console and aggressive mode live in settings.',
     statsLabel: 'Debug capture counters',
     events: ' events',
     network: ' network',
@@ -158,7 +160,7 @@ export const en = {
       'Git checkpoints require a one-time local companion install. After that, each annotation and edit is versioned inside the session.',
     step8Title: 'Use debugging capture for technical investigations',
     step8Tip:
-      'Start Debug capture when you need clicks, view changes, screenshots, and external API payloads. Console capture and aggressive mode are enabled from settings.',
+      'Start Debug capture when you need to map clicks, form changes, page views, and external API payloads. Console capture and aggressive mode are enabled from settings.',
   },
   reconnect: {
     message: 'Folder access expired. Reconnect to continue.',
